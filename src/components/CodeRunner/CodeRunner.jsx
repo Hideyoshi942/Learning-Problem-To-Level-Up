@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import styles from './CodeRunner.module.css'
 
 // Sandboxed iframe runner – safe execution
@@ -37,7 +37,7 @@ function runInSandbox(code) {
         _logs.push('❌ ' + e.name + ': ' + e.message);
       }
       parent.postMessage({ type: 'done', logs: _logs }, '*');
-    <\/script></body></html>`
+    </script></body></html>`
 
     const iframe = document.createElement('iframe')
     iframe.style.display = 'none'
@@ -47,7 +47,9 @@ function runInSandbox(code) {
     const handler = (e) => {
       if (e.data?.type === 'done') {
         window.removeEventListener('message', handler)
-        try { document.body.removeChild(iframe) } catch {}
+        if (iframe.parentNode) {
+          document.body.removeChild(iframe)
+        }
         resolve(e.data.logs)
       }
     }
@@ -57,7 +59,9 @@ function runInSandbox(code) {
 
     // Safety timeout – tránh infinite loop treo browser
     setTimeout(() => {
-      try { document.body.removeChild(iframe) } catch {}
+      if (iframe.parentNode) {
+        document.body.removeChild(iframe)
+      }
       window.removeEventListener('message', handler)
       resolve(['⏱️  Timeout sau 5 giây – có thể có infinite loop?'])
     }, 5000)
