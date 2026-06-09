@@ -1,11 +1,10 @@
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import useProgressStore from '../../store/useProgressStore'
 import { getTopic } from '../../data/index'
 import styles from './Topbar.module.css'
 
 export default function Topbar({ onMenuClick }) {
   const { levelId, topicSlug } = useParams()
-  const navigate = useNavigate()
   const { markDone, isDone } = useProgressStore()
 
   const topic = levelId && topicSlug ? getTopic(Number(levelId), topicSlug) : null
