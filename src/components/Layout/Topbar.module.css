@@ -1,0 +1,68 @@
+.topbar {
+  height: var(--topbar-h);
+  background: rgba(19, 22, 42, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.menuBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.menuBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex: 1;
+  flex-wrap: wrap;
+}
+.breadcrumb a {
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+.breadcrumb a:hover { color: var(--accent2); }
+.sep { color: var(--text-muted); }
+.current { color: var(--text-primary); font-weight: 500; }
+
+.right { display: flex; gap: 10px; }
+
+.markBtn {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none;
+  color: white;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.markBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.markBtn.done {
+  background: linear-gradient(135deg, #064e3b, #065f46);
+  border: 1px solid var(--success);
+  color: var(--success);
+}

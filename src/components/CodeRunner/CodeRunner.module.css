@@ -1,0 +1,114 @@
+.wrapper { margin-bottom: 32px; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+.tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 9px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text-secondary); }
+.tabActive { color: var(--accent2) !important; border-bottom-color: var(--accent2) !important; }
+
+/* Panel */
+.panel {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(99,120,255,0.04);
+}
+.dots { display: flex; gap: 6px; }
+.dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+.dot.red    { background: #ff5f57; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green  { background: #28c840; }
+
+.lang {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+}
+
+.runBtn {
+  background: linear-gradient(135deg, var(--success), #059669);
+  border: none;
+  color: white;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+}
+.runBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52,211,153,0.3);
+}
+.runBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Code */
+.code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-code);
+  padding: 20px;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+/* Output */
+.output {
+  background: #080a14;
+  border-top: 1px solid var(--border);
+  padding: 14px 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--success);
+  min-height: 60px;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.output.outputEmpty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}

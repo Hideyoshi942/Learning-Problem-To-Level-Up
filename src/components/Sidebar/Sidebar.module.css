@@ -1,0 +1,176 @@
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  z-index: 100;
+  overflow-y: auto;
+  transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+}
+.sidebar.hidden { transform: translateX(-100%); }
+
+/* Header */
+.header {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface);
+  z-index: 1;
+}
+.logoBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.logoIcon { font-size: 20px; }
+.logoText {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6378ff, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(99,120,255,0.1);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+/* Nav */
+.nav {
+  flex: 1;
+  padding: 8px 8px 12px;
+  overflow-y: auto;
+}
+
+/* Level Group */
+.levelGroup { margin-bottom: 4px; }
+
+.levelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+  cursor: pointer;
+  text-decoration: none;
+}
+.levelHeader:hover { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+.levelActive {
+  color: var(--level-color, var(--accent)) !important;
+  background: rgba(99,120,255,0.08) !important;
+}
+.levelEmoji { font-size: 14px; }
+.levelTitle { flex: 1; }
+.levelCount {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Topic Items */
+.topicList { margin-bottom: 4px; }
+
+.topicItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 24px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.15s;
+  margin-bottom: 1px;
+  position: relative;
+}
+.topicItem:hover { background: rgba(99,120,255,0.08); color: var(--text-primary); }
+.topicActive {
+  background: rgba(99,120,255,0.12) !important;
+  color: white !important;
+  border: 1px solid rgba(99,120,255,0.2);
+}
+.topicActive::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 20%; bottom: 20%;
+  width: 3px;
+  background: var(--level-color, var(--accent));
+  border-radius: 0 2px 2px 0;
+}
+.topicDone .topicTitle { text-decoration: line-through; opacity: 0.7; }
+.topicEmoji { font-size: 13px; flex-shrink: 0; }
+.topicTitle { flex: 1; line-height: 1.3; }
+.checkmark { color: var(--success); font-size: 11px; font-weight: 700; }
+
+/* Roadmap link */
+.roadmapLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.2s;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.roadmapLink:hover { background: rgba(99,120,255,0.08); color: var(--text-primary); }
+.roadmapActive { background: rgba(99,120,255,0.12) !important; color: var(--accent2) !important; }
+
+/* Footer */
+.footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-surface);
+}
+.progressInfo {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.progressCount { font-weight: 600; color: var(--accent2); }
+.progressTrack {
+  background: rgba(99,120,255,0.1);
+  border-radius: 10px;
+  height: 4px;
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  background: linear-gradient(to right, var(--accent), var(--accent2));
+  border-radius: 10px;
+  transition: width 0.5s cubic-bezier(.4,0,.2,1);
+}
