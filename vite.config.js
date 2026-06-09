@@ -7,5 +7,5 @@ export default defineConfig({
   // GitHub Pages serves under /<repo-name>/ – set base to match
   // Use env var so local dev still works with base '/'
   // eslint-disable-next-line no-undef
-  base: process.env.GITHUB_ACTIONS ? '/learning-hub-v2/' : '/',
+  base: process.env.GITHUB_ACTIONS ? '/Learning-Problem-To-Level-Up/' : '/',
 })
