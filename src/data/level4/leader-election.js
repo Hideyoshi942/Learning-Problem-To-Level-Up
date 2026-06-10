@@ -1,17 +1,16 @@
-const makeTopic = (slug, order, title, emoji, desc, project, concepts) => ({
-  slug, order, title, emoji, description: desc, project,
-  problems: [{ icon: '🚧', title: 'Coming Soon', desc: 'Nội dung đang được chuẩn bị.' }],
-  concepts,
-  demos: [{ id: 'cs', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title}');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Demos cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default makeTopic(
-  'leader-election', 19, 'Leader Election', '👑',
-  'Raft, Paxos, ZooKeeper để bầu leader trong distributed systems.',
-  'Distributed Scheduler.',
-  [
+export default {
+  slug: 'leader-election',
+  order: 19,
+  title: 'Leader Election',
+  emoji: '👑',
+  description: 'Raft, Paxos, ZooKeeper để bầu leader trong distributed systems.',
+  project: 'Distributed Scheduler.',
+  problems: [
+    { icon: '🧠', title: 'Hai Leader đồng thời (Split-Brain)', desc: 'Xảy ra khi chia cắt mạng, hai nhóm nhỏ tự bầu leader của riêng mình và đồng thời nhận ghi dữ liệu, gây mâu thuẫn dữ liệu nghiêm trọng.' },
+    { icon: '🌪️', title: 'Bão bầu cử (Election Storm)', desc: 'Khi nhiều node đồng thời hết hạn timeout và tranh giành quyền Leader, chúng gửi hàng loạt yêu cầu bỏ phiếu gây tắc nghẽn đường truyền mạng.' },
+    { icon: '📉', title: 'Mất mát dữ liệu khi chuyển giao', desc: 'Node được chọn làm Leader mới có thể chưa nhận đủ toàn bộ log từ Leader cũ, dẫn đến việc mất mát các giao dịch chưa kịp đồng bộ hoàn toàn.' }
+  ],
+  concepts: [
     {
       name: 'Raft Consensus',
       icon: '🗳️',
@@ -47,5 +46,148 @@ export default makeTopic(
       tip: 'Term/Epoch cũng dùng làm fencing token: storage server reject requests có term thấp hơn current term → cũ leader (tưởng mình vẫn là leader) không thể ghi sai data.',
       example: '// Raft Term usage:\n// Term 1: A là leader\n// Network partition: A bị isolated\n// B,C elect new leader B (term=2)\n// Partition heals:\n// A gửi message với term=1\n// B nhận: "term 1 < current term 2"\n// B ignores A\'s message\n// A nhận response với term=2\n// A: "term 2 > mine" → step down, become follower\n// → Safety: không có 2 leaders cùng tồn tại! ✅\n\n// ZooKeeper epoch:\nzxid = (epoch << 32) | counter\n// zxid tăng monotonically → total ordering của events',
     },
+  ],
+  demos: [
+    {
+      id: 'raft-election',
+      label: '🗳️ Raft Election Simulator',
+      language: 'javascript',
+      code: `// Giả lập thuật toán bầu chọn Leader theo phong cách Raft
+class RaftNode {
+  constructor(id, totalNodes) {
+    this.id = id;
+    this.totalNodes = totalNodes;
+    this.term = 0;
+    this.state = 'FOLLOWER'; // FOLLOWER, CANDIDATE, LEADER
+    this.votedFor = null;
+  }
+
+  // Nhận heartbeat từ leader để duy trì trạng thái follower
+  receiveHeartbeat(leaderId, term) {
+    if (term >= this.term) {
+      this.term = term;
+      this.state = 'FOLLOWER';
+      this.votedFor = null;
+      console.log(\`Node \${this.id} [FOLLOWER]: Nhận heartbeat từ Leader \${leaderId} ở Term \${term}\`);
+    }
+  }
+
+  // Bắt đầu quá trình tự ứng cử (Election Timeout xảy ra)
+  startElection() {
+    this.term += 1;
+    this.state = 'CANDIDATE';
+    this.votedFor = this.id; // Tự bầu cho mình
+    let votesCount = 1;
+    console.log(\`\\n📣 Node \${this.id} [CANDIDATE]: Bắt đầu bầu cử ở Term \${this.term}\`);
+
+    // Gửi yêu cầu bỏ phiếu đến các node khác
+    return votesCount;
+  }
+
+  // Node khác nhận được yêu cầu bỏ phiếu
+  handleVoteRequest(candidateId, candidateTerm) {
+    if (candidateTerm > this.term) {
+      this.term = candidateTerm;
+      this.state = 'FOLLOWER';
+      this.votedFor = candidateId;
+      console.log(\`   Node \${this.id}: Đồng ý bầu cho Node \${candidateId} (Term: \${candidateTerm})\`);
+      return true;
+    }
+    console.log(\`   Node \${this.id}: Từ chối bầu cho Node \${candidateId} (Term cũ: \${candidateTerm} <= \${this.term})\`);
+    return false;
+  }
+}
+
+const totalNodes = 3;
+const cluster = [
+  new RaftNode('Node-1', totalNodes),
+  new RaftNode('Node-2', totalNodes),
+  new RaftNode('Node-3', totalNodes)
+];
+
+// Giả định Node-1 bị mất kết nối mạng và kích hoạt bầu cử
+let votes = cluster[0].startElection();
+
+cluster.forEach(node => {
+  if (node.id !== 'Node-1') {
+    const approved = node.handleVoteRequest('Node-1', cluster[0].term);
+    if (approved) votes++;
+  }
+});
+
+const majority = Math.floor(totalNodes / 2) + 1;
+console.log(\`\\n📊 Tổng phiếu bầu nhận được: \${votes}/\${totalNodes} (Cần tối thiểu \${majority})\`);
+
+if (votes >= majority) {
+  cluster[0].state = 'LEADER';
+  console.log(\`👑 Node-1 đã trở thành LEADER mới ở Term \${cluster[0].term}!\`);
+}`
+    },
+    {
+      id: 'zookeeper-election',
+      label: '🦁 ZooKeeper Ephemeral Sequential Election',
+      language: 'javascript',
+      code: `// Giả lập Leader Election qua Ephemeral Sequential Node (Tránh Thundering Herd)
+class ZooKeeperMock {
+  constructor() {
+    this.zNodes = []; // Mảng chứa các ephemeral sequential path [{ path, nodeId }]
+    this.sequence = 0;
+  }
+
+  // Đăng ký tham gia bầu chọn
+  joinElection(nodeId) {
+    this.sequence++;
+    const path = \`/election/node-\${String(this.sequence).padStart(6, '0')}\`;
+    const znode = { path, nodeId };
+    this.zNodes.push(znode);
+    this.zNodes.sort((a, b) => a.path.localeCompare(b.path));
+    console.log(\`➕ \${nodeId} tham gia, tạo znode sequential: \${path}\`);
+    return path;
+  }
+
+  // Kiểm tra vai trò của Node
+  checkLeader(nodePath, nodeId) {
+    const index = this.zNodes.findIndex(z => z.path === nodePath);
+    if (index === 0) {
+      console.log(\`👑 \${nodeId} là node nhỏ nhất trên path (\${nodePath}) -> Trở thành LEADER!\`);
+      return 'LEADER';
+    } else {
+      const predecessor = this.zNodes[index - 1];
+      console.log(\`🔍 \${nodeId} ở vị trí \${index}. Không là leader. Đang thiết lập WATCH znode liền trước: \${predecessor.path}\`);
+      return \`WATCHING \${predecessor.nodeId}\`;
+    }
+  }
+
+  // Giả lập node sập
+  simulateCrash(nodeId) {
+    console.log(\`\\n💥 [Sự cố] Node \${nodeId} sập! Ephemeral znode của nó tự động bị xóa...\`);
+    this.zNodes = this.zNodes.filter(z => z.nodeId !== nodeId);
+  }
+}
+
+const zk = new ZooKeeperMock();
+const pathA = zk.joinElection('Node-A');
+const pathB = zk.joinElection('Node-B');
+const pathC = zk.joinElection('Node-C');
+
+console.log('\\n=== Kiểm tra vai trò ban đầu ===');
+zk.checkLeader(pathA, 'Node-A');
+zk.checkLeader(pathB, 'Node-B'); // Sẽ watch Node-A
+zk.checkLeader(pathC, 'Node-C'); // Sẽ watch Node-B
+
+// Node-A crash
+zk.simulateCrash('Node-A');
+
+// Kích hoạt Watcher của Node-B
+console.log('=== Kích hoạt sự kiện Watcher trên Node-B ===');
+zk.checkLeader(pathB, 'Node-B'); // Trở thành Leader mới`
+    }
+  ],
+  interactive: null,
+  callouts: [
+    { type: 'warning', icon: '⚠️', title: 'Luôn dùng số lượng node lẻ', body: 'Hãy luôn thiết lập số lượng node là lẻ (3, 5, 7) cho các cluster quản lý consensus. Số lượng node chẵn (như 4) không tăng khả năng chịu lỗi so với số lẻ nhỏ hơn gần nhất (3) mà chỉ tốn tài nguyên và dễ sinh tranh chấp.' },
+    { type: 'success', icon: '📦', title: 'Không tự viết thuật toán Consensus', body: 'Thuật toán consensus rất khó triển khai đúng 100% trong thực tế do biên dạng lỗi mạng đa dạng. Hãy sử dụng các thư viện chuẩn hóa như etcd, Consul hoặc ZooKeeper.' },
+    { type: 'info', icon: '🎯', title: 'Phân biệt Raft và Paxos', body: 'Raft sử dụng một Leader mạnh và tập trung quản lý dòng chảy dữ liệu, giúp dễ hiểu và triển khai hơn Paxos vốn mang tính phi tập trung và cấu trúc phức tạp hơn.' },
+    { type: 'tip', icon: '🔑', title: 'Sử dụng Fencing Token chống Stale Leader', body: 'Khi một Leader bị ngắt kết nối mạng tạm thời (GC Pause/Network Lag), nó có thể nghĩ mình vẫn là Leader. Hãy sinh Token tăng dần (Term/Epoch) trong các lệnh Write để storage server từ chối các request từ Leader hết hạn.' }
   ]
-)
+}

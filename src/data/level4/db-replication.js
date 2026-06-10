@@ -1,17 +1,16 @@
-const makeTopic = (slug, order, title, emoji, desc, project, concepts) => ({
-  slug, order, title, emoji, description: desc, project,
-  problems: [{ icon: '🚧', title: 'Coming Soon', desc: 'Nội dung đang được chuẩn bị.' }],
-  concepts,
-  demos: [{ id: 'cs', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title}');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Demos cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default makeTopic(
-  'db-replication', 16, 'Database Replication', '📋',
-  'Master-Replica replication để scale reads và high availability.',
-  'Social Network.',
-  [
+export default {
+  slug: 'db-replication',
+  order: 16,
+  title: 'Database Replication',
+  emoji: '📋',
+  description: 'Master-Replica replication để scale reads và high availability.',
+  project: 'Social Network.',
+  problems: [
+    { icon: '🛑', title: 'Single Point of Failure (SPOF)', desc: 'Nếu chỉ có một database duy nhất, khi database crash, toàn bộ hệ thống sẽ ngừng hoạt động và có nguy cơ mất mát dữ liệu.' },
+    { icon: '⏱️', title: 'Replication Lag (Trễ đồng bộ)', desc: 'Sau khi ghi vào Master, dữ liệu mất một khoảng thời gian để đồng bộ sang Replica. Đọc từ Replica ngay lập tức có thể nhận dữ liệu cũ.' },
+    { icon: '🧠', title: 'Split-Brain (Hai Master song song)', desc: 'Khi network partition xảy ra, một Replica tự bầu lên làm Master mới trong khi Master cũ vẫn chạy, dẫn đến việc ghi đè chéo và xung đột dữ liệu.' }
+  ],
+  concepts: [
     {
       name: 'Master Replica',
       icon: '👑',
@@ -47,5 +46,121 @@ export default makeTopic(
       tip: 'Binlog format: ROW (ghi from/to values, verbose), STATEMENT (ghi SQL), MIXED (kết hợp). ROW mode an toàn nhất cho replication vì không bị ảnh hưởng bởi non-deterministic functions.',
       example: '-- Enable binary log:\n# my.cnf:\nlog-bin = mysql-bin\nbinlog-format = ROW\nbinlog-row-image = FULL\nserver-id = 1\n\n-- Xem binlog:\nSHOW BINARY LOGS;\n-- mysql-bin.000001  1073741824\n-- mysql-bin.000002  524288000\n\n-- Đọc binlog:\nmysqlbinlog mysql-bin.000001\n-- Hoặc dùng Debezium để stream binlog → Kafka\n-- → CDC pipeline cho real-time data sync',
     },
+  ],
+  demos: [
+    {
+      id: 'read-write-split',
+      label: '✂️ Read/Write Split',
+      language: 'javascript',
+      code: `// Giả lập hệ thống Routing và Read/Write Split
+class DatabaseCluster {
+  constructor() {
+    this.master = { name: 'Master-DB', data: {} };
+    this.replicas = [
+      { name: 'Replica-1', data: {} },
+      { name: 'Replica-2', data: {} }
+    ];
+  }
+
+  // Tác vụ ghi: Bắt buộc đi vào Master
+  write(query, key, value) {
+    console.log(\`📝 [Ghi] Routing query "\${query}" tới \${this.master.name}\`);
+    this.master.data[key] = value;
+    
+    // Đồng bộ bất đồng bộ sang Replicas
+    this.syncToReplicas(key, value);
+  }
+
+  // Tác vụ đọc: Round-robin phân phối tải giữa các Replicas
+  read(key) {
+    const replicaIndex = Math.floor(Math.random() * this.replicas.length);
+    const target = this.replicas[replicaIndex];
+    console.log(\`🔍 [Đọc] Routing query "GET \${key}" tới \${target.name}\`);
+    return target.data[key];
+  }
+
+  syncToReplicas(key, value) {
+    this.replicas.forEach((rep, idx) => {
+      setTimeout(() => {
+        rep.data[key] = value;
+        console.log(\`⏱️  [Sync] Đã sync "\${key}" từ Master sang \${rep.name}\`);
+      }, (idx + 1) * 100); // Giả lập replication lag khác nhau
+    });
+  }
+}
+
+const db = new DatabaseCluster();
+console.log('=== Thực hiện Ghi ===');
+db.write('INSERT INTO users VALUES ("john")', 'user:1', { name: 'John Doe' });
+
+console.log('\\n=== Thực hiện Đọc ngay lập tức (Lag có thể xảy ra) ===');
+console.log('User value:', db.read('user:1')); // Có thể undefined vì replica chưa sync kịp
+
+setTimeout(() => {
+  console.log('\\n=== Thực hiện Đọc sau khi đã sync xong ===');
+  console.log('User value:', db.read('user:1'));
+}, 350);`
+    },
+    {
+      id: 'read-your-writes',
+      label: '⏱️ Read-Your-Writes Consistent',
+      language: 'javascript',
+      code: `// Khắc phục Replication Lag bằng cơ chế Read-Your-Writes
+class SmartDbRouter {
+  constructor() {
+    this.master = { data: {} };
+    this.replica = { data: {} };
+    this.lagMs = 300;
+  }
+
+  write(userId, profile) {
+    console.log(\`📝 [Write] Cập nhật thông tin \${userId} vào Master\`);
+    this.master.data[userId] = profile;
+
+    // Giả lập sync lag
+    setTimeout(() => {
+      this.replica.data[userId] = profile;
+      console.log(\`⏱️  [Sync] Hoàn tất sync data của \${userId} sang Replica\`);
+    }, this.lagMs);
+
+    // Trả về thời điểm vừa ghi để client biết
+    return Date.now();
+  }
+
+  // Cơ chế routing thông minh dựa trên thời gian ghi
+  read(userId, lastWriteTime) {
+    const isRecentlyWritten = lastWriteTime && (Date.now() - lastWriteTime < this.lagMs + 100);
+
+    if (isRecentlyWritten) {
+      console.log(\`⚡ [Read-Master] Phát hiện vừa write gần đây (\${Date.now() - lastWriteTime}ms). Bắt buộc route tới Master!\`);
+      return this.master.data[userId];
+    } else {
+      console.log(\`🔍 [Read-Replica] Dữ liệu đã ổn định. Route tới Replica để giảm tải cho Master\`);
+      return this.replica.data[userId];
+    }
+  }
+}
+
+const db = new SmartDbRouter();
+console.log('=== User cập nhật profile ===');
+const writeTime = db.write('user:99', { name: 'Alice', age: 25 });
+
+console.log('\\n=== User refresh trang và xem profile ngay lập tức ===');
+const profile1 = db.read('user:99', writeTime); // Phải hiển thị đúng Alice
+console.log('Profile:', profile1);
+
+setTimeout(() => {
+  console.log('\\n=== Đọc lại sau 500ms khi data đã sync ổn định ===');
+  const profile2 = db.read('user:99', writeTime); // Đọc từ replica
+  console.log('Profile:', profile2);
+}, 500);`
+    }
+  ],
+  interactive: null,
+  callouts: [
+    { type: 'warning', icon: '🚫', title: 'Không lạm dụng replication để scale writes', body: 'Master-Replica replication chỉ giúp phân phối tải đọc (Scale Reads). Để scale ghi (Writes), bạn cần áp dụng Sharding hoặc Multi-master.' },
+    { type: 'success', icon: '🔄', title: 'Automated Failover đáng tin cậy', body: 'Sử dụng các công cụ trưởng thành như Patroni (PostgreSQL) hoặc Redis Sentinel để tự động phát hiện Master crash, bầu chọn leader mới và update IP nổi mà không cần can thiệp thủ công.' },
+    { type: 'info', icon: '⏱️', title: 'Chấp nhận Eventual Consistency', body: 'Do độ trễ mạng và tải xử lý, replication lag luôn tồn tại. Hệ thống microservices cần chấp nhận sự nhất quán cuối cùng thay vì nhất quán tuyệt đối.' },
+    { type: 'tip', icon: '💡', title: 'Sử dụng DB Proxy', body: 'Nên đặt các DB Proxy như ProxySQL hoặc PgBouncer ở trước cluster để ứng dụng không cần tự quản lý logic chia luồng đọc/ghi.' }
   ]
-)
+}

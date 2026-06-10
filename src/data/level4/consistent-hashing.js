@@ -1,17 +1,16 @@
-const makeTopic = (slug, order, title, emoji, desc, project, concepts) => ({
-  slug, order, title, emoji, description: desc, project,
-  problems: [{ icon: '🚧', title: 'Coming Soon', desc: 'Nội dung đang được chuẩn bị.' }],
-  concepts,
-  demos: [{ id: 'cs', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title}');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Demos cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default makeTopic(
-  'consistent-hashing', 18, 'Consistent Hashing', '⭕',
-  'Hash ring giúp distribute data đều và minimize rebalancing khi thêm/xoá node.',
-  'Distributed Cache.',
-  [
+export default {
+  slug: 'consistent-hashing',
+  order: 18,
+  title: 'Consistent Hashing',
+  emoji: '⭕',
+  description: 'Hash ring giúp distribute data đều và minimize rebalancing khi thêm/xoá node.',
+  project: 'Distributed Cache.',
+  problems: [
+    { icon: '⚖️', title: 'Phân phối tải không đều (Hotspots)', desc: 'Nếu số lượng node ít và không sử dụng Virtual Nodes, các node có thể nhận lượng dữ liệu chênh lệch nhau rất nhiều trên vòng tròn Hash.' },
+    { icon: '🚚', title: 'Dịch chuyển dữ liệu (Data Migration)', desc: 'Mặc dù Consistent Hashing giảm thiểu số key phải di chuyển, việc thêm/bớt node vẫn kích hoạt quá trình chuyển giao terabytes dữ liệu giữa các node kế cận.' },
+    { icon: '💥', title: 'Cascading Failure khi sập node', desc: 'Khi một node đột ngột sập, toàn bộ tải của nó sẽ chuyển sang node kế tiếp trên vòng tròn, có thể gây ra hiện tượng quá tải dây chuyền.' }
+  ],
+  concepts: [
     {
       name: 'Hash Ring',
       icon: '⭕',
@@ -47,5 +46,112 @@ export default makeTopic(
       tip: 'Nginx Consistent Hash module: proxy_cache_path + hash $request_uri consistent. Haproxy: balance uri. Envoy: ring_hash load balancer policy.',
       example: '// Nginx consistent hashing:\nupstream backend {\n  hash $request_uri consistent;  # Hash by URI\n  server backend-1:8080;\n  server backend-2:8080;\n  server backend-3:8080;\n}\n\n// Kết quả:\n// /api/product/123 → luôn → backend-2 (cache warm!)\n// /api/product/456 → luôn → backend-1\n// Nếu backend-2 down → /api/product/123 → backend-3\n// Chỉ ~33% requests bị re-routed (không phải 100%)\n// → Cache hit rate cao hơn simple round-robin',
     },
+  ],
+  demos: [
+    {
+      id: 'consistent-hash-ring',
+      label: '⭕ Hash Ring với vNodes',
+      language: 'javascript',
+      code: `// Giả lập vòng tròn Hash Ring với Virtual Nodes
+class ConsistentHashRing {
+  constructor(vNodesPerNode = 3) {
+    this.vNodesPerNode = vNodesPerNode;
+    this.ring = []; // Danh sách vNodes đã sort [{ hash, physicalNode }]
+    this.nodes = new Set();
+  }
+
+  // Thuật toán băm đơn giản (Fowler-Noll-Vo hoặc tương đương)
+  hash(str) {
+    let hash = 8191;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 33) ^ str.charCodeAt(i);
+    }
+    return Math.abs(hash) % 1000000; // Giới hạn dải hash để dễ debug
+  }
+
+  addNode(nodeName) {
+    this.nodes.add(nodeName);
+    for (let i = 0; i < this.vNodesPerNode; i++) {
+      const vNodeKey = \`\${nodeName}-vnode-\${i}\`;
+      const hashVal = this.hash(vNodeKey);
+      this.ring.push({ hash: hashVal, physicalNode: nodeName });
+      console.log(\`➕ Đặt vNode [\${vNodeKey}] tại tọa độ: \${hashVal}\`);
+    }
+    // Sắp xếp lại ring theo tọa độ tăng dần
+    this.ring.sort((a, b) => a.hash - b.hash);
+  }
+
+  getNode(key) {
+    if (this.ring.length === 0) return null;
+    const keyHash = this.hash(key);
+    
+    // Tìm node đầu tiên có hash >= keyHash (successor)
+    for (const node of this.ring) {
+      if (node.hash >= keyHash) {
+        return { node: node.physicalNode, keyHash, nodeHash: node.hash };
+      }
+    }
+    
+    // Nếu đi hết vòng tròn, wrap-around về node đầu tiên
+    return { node: this.ring[0].physicalNode, keyHash, nodeHash: this.ring[0].hash };
+  }
+}
+
+const ring = new ConsistentHashRing(3);
+ring.addNode('Server-A');
+ring.addNode('Server-B');
+
+console.log('\\n=== Đọc/Ghi dữ liệu và Routing ===');
+const keys = ['user:alice', 'user:bob', 'user:charlie', 'user:david'];
+keys.forEach(k => {
+  const res = ring.getNode(k);
+  console.log(\`🔑 Key: "\${k}" (hash: \${res.keyHash}) -> Gặp node đầu tiên \${res.node} (hash: \${res.nodeHash})\`);
+});`
+    },
+    {
+      id: 'rebalancing-simulation',
+      label: '🔄 Rebalancing Simulator',
+      language: 'javascript',
+      code: `// So sánh số key cần chuyển dịch giữa Modulo Hashing vs Consistent Hashing
+const numKeys = 1000;
+
+// Giả lập Modulo Hashing
+function moduloHashDistribution(nodesCount) {
+  const dist = [];
+  for (let i = 0; i < numKeys; i++) {
+    dist.push(i % nodesCount);
+  }
+  return dist;
+}
+
+// 1. Chạy Modulo Hashing với 3 nodes sau đó lên 4 nodes
+const dist3 = moduloHashDistribution(3);
+const dist4 = moduloHashDistribution(4);
+
+let migratedModulo = 0;
+for (let i = 0; i < numKeys; i++) {
+  if (dist3[i] !== dist4[i]) migratedModulo++;
+}
+
+console.log('=== Modulo Hashing Rebalancing ===');
+console.log(\`Số node tăng: 3 -> 4\`);
+console.log(\`Tổng số key: \${numKeys}\`);
+console.log(\`Số key bị đổi vị trí: \${migratedModulo} (\${(migratedModulo/numKeys * 100).toFixed(1)}%)\`);
+console.log('❌ Hầu như toàn bộ cache bị mất sạch!');
+
+// 2. Consistent Hashing giả lập rebalancing
+// (Chỉ ~1/N tổng số key cần di chuyển sang node mới)
+console.log('\\n=== Consistent Hashing Rebalancing ===');
+const theoreticalMigration = 1 / 4; // Node mới chiếm 25% vòng tròn
+console.log(\`Số key cần di chuyển lý thuyết: ~\${(theoreticalMigration * 100).toFixed(0)}% (chỉ di chuyển các key nằm trong dải hash của node mới)\`);
+console.log('✅ Hiệu năng cache được duy trì ổn định!');`
+    }
+  ],
+  interactive: null,
+  callouts: [
+    { type: 'warning', icon: '⚠️', title: 'Modulo Hash gây rụng cache hàng loạt', body: 'Tuyệt đối không dùng công thức key % N trong các hệ thống phân tán có tính co giãn (Auto-scaling). Việc thêm hoặc bớt 1 server sẽ khiến 80-100% cache bị sai vị trí và gây quá tải DB.' },
+    { type: 'success', icon: '👑', title: 'Sự lựa chọn của các Big Tech', body: 'Cassandra, DynamoDB, Memcached Client, và các CDN lớn đều sử dụng Consistent Hashing làm xương sống để quản lý lưu trữ phân tán.' },
+    { type: 'info', icon: '👥', title: 'Vai trò cốt lõi của Virtual Nodes', body: 'Virtual Nodes (vNodes) giúp chia nhỏ lát cắt trên vòng tròn Hash. Số lượng vNode càng nhiều thì phân phối dữ liệu giữa các server vật lý càng cân bằng.' },
+    { type: 'tip', icon: '⚡', title: 'Tối ưu hóa Stateless Load Balancing', body: 'Sử dụng Consistent Hashing ở tầng Proxy (Nginx, Envoy) giúp định tuyến client IP cố định đến cùng một API server, giữ ấm local session cache hiệu quả.' }
   ]
-)
+}

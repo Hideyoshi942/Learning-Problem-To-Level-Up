@@ -1,17 +1,16 @@
-const makeTopic = (slug, order, title, emoji, desc, project, concepts) => ({
-  slug, order, title, emoji, description: desc, project,
-  problems: [{ icon: '🚧', title: 'Coming Soon', desc: 'Nội dung đang được chuẩn bị.' }],
-  concepts,
-  demos: [{ id: 'cs', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title}');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Demos cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default makeTopic(
-  'distributed-cache', 20, 'Distributed Cache', '🗄️',
-  'Redis Cluster và Cache Consistency cho hệ thống cache phân tán.',
-  'Product Catalog.',
-  [
+export default {
+  slug: 'distributed-cache',
+  order: 20,
+  title: 'Distributed Cache',
+  emoji: '🗄️',
+  description: 'Redis Cluster và Cache Consistency cho hệ thống cache phân tán.',
+  project: 'Product Catalog.',
+  problems: [
+    { icon: '🌪️', title: 'Cache Stampede (Thundering Herd)', desc: 'Khi một key hot hết hạn TTL, hàng vạn request đồng thời chọc thẳng xuống DB để lấy dữ liệu mới, gây sập cơ sở dữ liệu.' },
+    { icon: '🕳️', title: 'Cache Penetration (Thủng cache)', desc: 'Client liên tục truy vấn các key không tồn tại trong hệ thống. Vì không có trong cache, tất cả query đều đi xuống DB, làm cạn kiệt tài nguyên.' },
+    { icon: '🔥', title: 'Nghẽn mạng do Hot Key', desc: 'Một vài key nhận lượng truy cập khổng lồ (ví dụ sản phẩm hot sale), khiến băng thông và CPU của node chứa key đó bị quá tải hoàn toàn.' }
+  ],
+  concepts: [
     {
       name: 'Redis Cluster',
       icon: '🔴',
@@ -47,5 +46,133 @@ export default makeTopic(
       tip: 'Redis Cluster dùng gossip để maintain cluster topology. Mỗi 100ms, node ping một vài nodes khác. Nếu node không respond trong 15s (cluster-node-timeout) → suspicious, sau thêm thời gian → fail.',
       example: '// Gossip trong Redis Cluster:\n// Mỗi 100ms, Node A chọn ngẫu nhiên vài nodes:\nNodeA.gossip([\n  { to: NodeB, send: clusterState },\n  { to: NodeC, send: clusterState },\n]);\n// NodeB, C update knowledge và gossip tiếp\n// → Sau vài rounds, tất cả nodes biết cluster state\n\n// CLUSTER INFO:\ncluster_state: ok\ncluster_slots_assigned: 16384\ncluster_known_nodes: 6\ncluster_size: 3\n\n// CLUSTER NODES: xem routing table\n127.0.0.1:7001 master - slots:0-5460\n127.0.0.1:7002 master - slots:5461-10922',
     },
+  ],
+  demos: [
+    {
+      id: 'cluster-routing',
+      label: '🔴 Redis Cluster Slot Routing',
+      language: 'javascript',
+      code: `// Giả lập cơ chế tính Slot và định tuyến Client-side của Redis Cluster
+class RedisClusterClient {
+  constructor() {
+    // Định nghĩa 3 node tương ứng với 3 dải slot
+    this.nodes = [
+      { name: 'Node-7001', minSlot: 0, maxSlot: 5460, data: new Map() },
+      { name: 'Node-7002', minSlot: 5461, maxSlot: 10922, data: new Map() },
+      { name: 'Node-7003', minSlot: 10923, maxSlot: 16383, data: new Map() }
+    ];
+  }
+
+  // Thuật toán băm CRC16 đơn giản
+  calculateSlot(key) {
+    // Nếu key có cấu trúc hash tag {abc}, chỉ băm phần bên trong
+    const match = key.match(/\\{(.+?)\\}/);
+    const targetKey = match ? match[1] : key;
+
+    let hash = 0;
+    for (let i = 0; i < targetKey.length; i++) {
+      hash = (hash * 33) ^ targetKey.charCodeAt(i);
+    }
+    return Math.abs(hash) % 16384;
+  }
+
+  set(key, value) {
+    const slot = this.calculateSlot(key);
+    const targetNode = this.nodes.find(n => slot >= n.minSlot && slot <= n.maxSlot);
+    targetNode.data.set(key, value);
+    console.log(\`🎯 Key "\${key}" (Slot: \${slot}) -> Định tuyến tới \${targetNode.name}\`);
+  }
+}
+
+const client = new RedisClusterClient();
+console.log('=== Ghi dữ liệu thông thường ===');
+client.set('user:alice', 'data_1');
+client.set('product:102', 'data_2');
+
+console.log('\\n=== Ép buộc ghi chung Slot bằng Hash Tag ===');
+client.set('{user:alice}.profile', 'profile_details');
+client.set('{user:alice}.settings', 'settings_details');
+// Cả 3 key của user:alice đều rơi vào cùng 1 slot và 1 node!`
+    },
+    {
+      id: 'double-delete',
+      label: '🔄 Cache Double-Delete Pattern',
+      language: 'javascript',
+      code: `// Giả lập Race Condition khi xóa cache và giải pháp Double-Delete
+class DatabaseAndCache {
+  constructor() {
+    this.db = { profile: 'Old Value' };
+    this.cache = new Map();
+    this.cache.set('profile', 'Old Value');
+  }
+
+  async read() {
+    if (this.cache.has('profile')) {
+      return { source: 'Cache', value: this.cache.get('profile') };
+    }
+    // Cache miss -> đọc DB và nạp cache
+    const val = this.db.profile;
+    // Giả lập mạng chậm khi nạp cache
+    await new Promise(r => setTimeout(r, 50));
+    this.cache.set('profile', val);
+    return { source: 'Database', value: val };
+  }
+
+  async badUpdate(newValue) {
+    console.log('\\n📝 [Update-Thường] Cập nhật profile và xóa cache...');
+    this.db.profile = newValue;
+    this.cache.delete('profile'); // Xóa cache lần 1
+  }
+
+  async smartUpdate(newValue) {
+    console.log('\\n🛡️ [Update-Double-Delete] Bắt đầu sửa đổi an toàn...');
+    
+    // Bước 1: Xóa cache trước
+    this.cache.delete('profile');
+    
+    // Bước 2: Sửa DB
+    this.db.profile = newValue;
+    
+    // Bước 3: Đợi một chút rồi xóa tiếp lần 2
+    setTimeout(() => {
+      this.cache.delete('profile');
+      console.log('🧹 [Double-Delete] Đã thực hiện xóa cache lần 2 để dọn dẹp các ghi đè lỗi!');
+    }, 150);
+  }
+}
+
+(async () => {
+  const system = new DatabaseAndCache();
+
+  // GIẢ LẬP LỖI RACE CONDITION
+  await system.badUpdate('New Value');
+  
+  // Có một Client khác đọc ngay lúc này (đang nạp giá trị cũ do trễ mạng)
+  system.read(); 
+
+  setTimeout(async () => {
+    const res = await system.read();
+    console.log(\`❌ Lỗi: Dữ liệu bị lệch! DB là 'New Value' nhưng Cache lại là: '\${res.value}'\`);
+    
+    // GIẢI PHÁP AN TOÀN
+    await system.smartUpdate('Consistent Value');
+    
+    // Client đọc xen ngang
+    system.read(); 
+
+    setTimeout(async () => {
+      const res2 = await system.read();
+      console.log(\`✅ Thành công: Cache nhất quán sau double delete. Cache value: '\${res2.value}'\`);
+    }, 200);
+  }, 100);
+})();`
+    }
+  ],
+  interactive: null,
+  callouts: [
+    { type: 'warning', icon: '⚠️', title: 'Phòng tránh Tuyết Lở Cache (Cache Avalanche)', body: 'Nếu hàng loạt key hết hạn cùng một thời điểm, toàn bộ tải sẽ đổ xuống DB cùng lúc. Hãy thêm một khoảng thời gian ngẫu nhiên (random jitter, e.g. 1-5 phút) vào TTL của từng key để rải đều thời gian hết hạn.' },
+    { type: 'success', icon: '⚡', title: 'Multi-key với Hash Tags', body: 'Hãy tận dụng Hash Tags dạng {key_chinh}:sub_key trong Redis Cluster để gom các dữ liệu liên quan về cùng một shard, cho phép sử dụng các giao dịch MULTI/EXEC hiệu quả.' },
+    { type: 'info', icon: '⏱️', title: 'Cache Aside là Eventual Consistency', body: 'Với Cache Aside, bạn chấp nhận việc dữ liệu có thể không đồng bộ tuyệt đối trong tích tắc. Đây là sự đánh đổi (Trade-off) để đạt hiệu năng chịu tải tối đa.' },
+    { type: 'tip', icon: '🛡️', title: 'Sử dụng Bloom Filter giải quyết thủng cache', body: 'Để chống lại các đợt tấn công Cache Penetration, hãy đặt một Bloom Filter trước cache để lọc nhanh và từ chối các key chắc chắn không tồn tại.' }
   ]
-)
+}
