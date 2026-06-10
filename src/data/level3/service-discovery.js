@@ -1,17 +1,16 @@
-const makeTopic = (slug, order, title, emoji, desc, project, concepts) => ({
-  slug, order, title, emoji, description: desc, project,
-  problems: [{ icon: '🚧', title: 'Coming Soon', desc: 'Nội dung đang được chuẩn bị.' }],
-  concepts,
-  demos: [{ id: 'cs', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title}');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Demos cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default makeTopic(
-  'service-discovery', 15, 'Service Discovery', '🗺️',
-  'Registry và Health Check cho microservices tự động tìm thấy nhau.',
-  'Microservice Platform.',
-  [
+export default {
+  slug: 'service-discovery',
+  order: 15,
+  title: 'Service Discovery',
+  emoji: '🗺️',
+  description: 'Registry và Health Check cho microservices tự động tìm thấy nhau.',
+  project: 'Microservice Platform.',
+  problems: [
+    { icon: '🔧', title: 'Hardcoded IP addresses', desc: 'Khi scale thêm instances hoặc restart service, IP thay đổi. Config hardcoded cần update thủ công → downtime và lỗi.' },
+    { icon: '💀', title: 'Không biết service nào đang sống', desc: 'Load balancer gửi traffic đến unhealthy instances → request fail. Cần tự động phát hiện và loại bỏ bad instances.' },
+    { icon: '🌐', title: 'Multi-environment complexity', desc: 'Dev, staging, production có addresses khác nhau. Quản lý config cho nhiều environments rất phức tạp và error-prone.' },
+  ],
+  concepts: [
     {
       name: 'Service Registry',
       icon: '📒',
@@ -47,5 +46,223 @@ export default makeTopic(
       tip: 'DNS TTL phải ngắn (vài giây) để clients cập nhật nhanh khi service thay đổi. DNS caching ở client side có thể gây issues – dùng InetAddress.setDefaultUseCaches(false) trong Java.',
       example: '// Kubernetes DNS:\n# Service: payment-service trong namespace default\n# DNS name: payment-service.default.svc.cluster.local\n\n# Gọi service đơn giản:\nconst response = await fetch("http://payment-service/api/charge");\n// CoreDNS resolve: payment-service → 10.96.0.10 (ClusterIP)\n// ClusterIP load balance đến Pods\n\n# Cross-namespace:\n# http://payment-service.payments.svc.cluster.local\n\n# Headless service (trả về Pod IPs thay vì ClusterIP):\nspec:\n  clusterIP: None  # Headless\n# → DNS trả về IPs của tất cả healthy Pods trực tiếp',
     },
-  ]
-)
+  ],
+  demos: [
+    {
+      id: 'service-registry-demo',
+      label: '📒 Service Registry',
+      language: 'javascript',
+      code: `// Service Registry Simulation
+// Minh họa: Auto-discovery + Health Check + Load Balancing
+
+class ServiceRegistry {
+  constructor() {
+    this.services = new Map(); // name → [instances]
+    this.healthChecks = new Map();
+  }
+
+  register(name, instance) {
+    if (!this.services.has(name)) this.services.set(name, []);
+    const instances = this.services.get(name);
+    
+    const entry = {
+      id: \`\${name}-\${instance.host}-\${instance.port}\`,
+      ...instance,
+      status: 'healthy',
+      registeredAt: Date.now(),
+      lastHeartbeat: Date.now()
+    };
+    
+    instances.push(entry);
+    console.log(\`  📝 Registered: \${entry.id} (\${instance.host}:\${instance.port})\`);
+    return entry;
+  }
+
+  deregister(name, instanceId) {
+    const instances = this.services.get(name) || [];
+    const idx = instances.findIndex(i => i.id === instanceId);
+    if (idx !== -1) {
+      instances.splice(idx, 1);
+      console.log(\`  ❌ Deregistered: \${instanceId}\`);
+    }
+  }
+
+  markUnhealthy(name, instanceId) {
+    const instances = this.services.get(name) || [];
+    const instance = instances.find(i => i.id === instanceId);
+    if (instance) {
+      instance.status = 'unhealthy';
+      console.log(\`  💀 Marked unhealthy: \${instanceId}\`);
+    }
+  }
+
+  discover(name) {
+    const instances = this.services.get(name) || [];
+    const healthy = instances.filter(i => i.status === 'healthy');
+    
+    if (healthy.length === 0) throw new Error(\`No healthy instances for \${name}\`);
+    
+    // Round-robin load balancing
+    const instance = healthy[Math.floor(Math.random() * healthy.length)];
+    return instance;
+  }
+
+  listAll() {
+    console.log('\\n📋 Registry State:');
+    for (const [name, instances] of this.services) {
+      console.log(\`  [\${name}] \${instances.length} instances:\`);
+      instances.forEach(i => {
+        const icon = i.status === 'healthy' ? '✅' : '❌';
+        console.log(\`    \${icon} \${i.id} (\${i.host}:\${i.port})\`);
+      });
+    }
+  }
+}
+
+// === Demo: Microservice Platform ===
+const registry = new ServiceRegistry();
+
+console.log('=== Services Starting Up ===');
+registry.register('payment-service', { host: '10.0.0.1', port: 8080, version: 'v2' });
+registry.register('payment-service', { host: '10.0.0.2', port: 8080, version: 'v2' });
+registry.register('payment-service', { host: '10.0.0.3', port: 8080, version: 'v2' });
+registry.register('inventory-service', { host: '10.0.1.1', port: 9090, version: 'v1' });
+registry.register('inventory-service', { host: '10.0.1.2', port: 9090, version: 'v1' });
+
+registry.listAll();
+
+// Simulate health check failure
+console.log('\\n=== Health Check: 10.0.0.2 fails ===');
+registry.markUnhealthy('payment-service', 'payment-service-10.0.0.2-8080');
+registry.listAll();
+
+// Client discovers service (only gets healthy instances)
+console.log('\\n=== Client Discovering payment-service (5 calls) ===');
+for (let i = 0; i < 5; i++) {
+  const instance = registry.discover('payment-service');
+  console.log(\`  Call \${i+1}: routed to \${instance.host}:\${instance.port}\`);
+}`,
+    },
+    {
+      id: 'health-check-demo',
+      label: '❤️ Health Check',
+      language: 'javascript',
+      code: `// Health Check Pattern
+// Kubernetes-style Liveness & Readiness Probes
+
+class ServiceInstance {
+  constructor(name, config = {}) {
+    this.name = name;
+    this.isAlive = true;         // Liveness
+    this.isReady = false;        // Readiness (false until startup done)
+    this.startupTime = config.startupTime || 2000;
+    this.dependencies = {
+      database: 'ok',
+      redis: 'ok',
+      externalApi: 'ok'
+    };
+    this.requestCount = 0;
+    this.startTime = Date.now();
+  }
+
+  // Startup simulation
+  async startup() {
+    console.log(\`  🚀 \${this.name} starting (takes \${this.startupTime}ms)...\`);
+    await new Promise(r => setTimeout(r, this.startupTime));
+    this.isReady = true;
+    console.log(\`  ✅ \${this.name} is ready!\`);
+  }
+
+  // Liveness: is the process alive?
+  livenessCheck() {
+    return {
+      alive: this.isAlive,
+      uptime: Date.now() - this.startTime,
+      pid: Math.floor(Math.random() * 9999) + 1000 // simulated PID
+    };
+  }
+
+  // Readiness: can it serve traffic?
+  readinessCheck() {
+    const depStatus = Object.values(this.dependencies).every(s => s === 'ok');
+    const ready = this.isReady && depStatus;
+
+    return {
+      ready,
+      dependencies: this.dependencies,
+      requestCount: this.requestCount
+    };
+  }
+
+  // Simulate dependency failure
+  failDependency(dep) {
+    this.dependencies[dep] = 'error';
+    console.log(\`  ⚠️  \${this.name}: \${dep} is down!\`);
+  }
+
+  // Simulate recovery
+  recoverDependency(dep) {
+    this.dependencies[dep] = 'ok';
+    console.log(\`  💚 \${this.name}: \${dep} recovered\`);
+  }
+}
+
+// Kubernetes Probe Simulator
+class KubeProber {
+  probe(instance, type) {
+    if (type === 'liveness') {
+      const result = instance.livenessCheck();
+      const status = result.alive ? '✅ PASS' : '❌ FAIL → Will restart!';
+      console.log(\`  Liveness \${instance.name}: \${status} (uptime: \${result.uptime}ms)\`);
+      return result.alive;
+    }
+    
+    if (type === 'readiness') {
+      const result = instance.readinessCheck();
+      const status = result.ready ? '✅ PASS' : '⛔ FAIL → Remove from LB';
+      const deps = Object.entries(result.dependencies)
+        .map(([k,v]) => \`\${k}:\${v === 'ok' ? '✅' : '❌'}\`)
+        .join(', ');
+      console.log(\`  Readiness \${instance.name}: \${status}\`);
+      console.log(\`    Dependencies: \${deps}\`);
+      return result.ready;
+    }
+  }
+}
+
+async function demo() {
+  const service = new ServiceInstance('payment-service', { startupTime: 500 });
+  const prober = new KubeProber();
+
+  console.log('=== Service Starting ===');
+  console.log('\\n[Before ready]');
+  prober.probe(service, 'liveness');
+  prober.probe(service, 'readiness');
+
+  await service.startup();
+
+  console.log('\\n[After startup]');
+  prober.probe(service, 'liveness');
+  prober.probe(service, 'readiness');
+
+  console.log('\\n=== Database connection drops ===');
+  service.failDependency('database');
+  prober.probe(service, 'liveness');   // Still alive
+  prober.probe(service, 'readiness'); // Not ready → removed from LB
+
+  console.log('\\n=== Database recovers ===');
+  service.recoverDependency('database');
+  prober.probe(service, 'readiness'); // Ready again → re-added to LB
+}
+
+demo();`,
+    },
+  ],
+  interactive: null,
+  callouts: [
+    { type: 'success', icon: '❤️', title: 'Health Check là nền tảng', body: 'Liveness + Readiness probes là cặp bài trùng trong Kubernetes. Liveness quyết định restart, Readiness quyết định traffic routing. Thiếu readiness probe → traffic vào service chưa sẵn sàng = lỗi.' },
+    { type: 'warning', icon: '📒', title: 'Registry phải HA', body: 'Service Registry là single point of failure nếu không có HA. Consul cluster (3-5 nodes với Raft), Eureka cluster, hoặc etcd cluster đảm bảo registry luôn available. Clients cần cache registry data để chịu được downtime ngắn.' },
+    { type: 'info', icon: '🌐', title: 'Kubernetes làm sẵn cho bạn', body: 'Trong Kubernetes: CoreDNS làm DNS discovery, Service object làm load balancing, Readiness/Liveness probes làm health check tự động. Không cần Consul/Eureka nếu bạn đang dùng K8s.' },
+    { type: 'tip', icon: '🔄', title: 'Client-side vs Server-side Discovery', body: 'Server-side: Load balancer query registry và route (đơn giản cho client). Client-side: Client query registry và chọn instance (linh hoạt hơn, Eureka model). K8s dùng server-side (Service/ClusterIP).' },
+  ],
+}

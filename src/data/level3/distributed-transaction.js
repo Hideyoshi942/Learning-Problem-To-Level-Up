@@ -1,17 +1,16 @@
-const makeTopic = (slug, order, title, emoji, desc, project, concepts) => ({
-  slug, order, title, emoji, description: desc, project,
-  problems: [{ icon: '🚧', title: 'Coming Soon', desc: 'Nội dung đang được chuẩn bị.' }],
-  concepts,
-  demos: [{ id: 'cs', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title}');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Demos cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default makeTopic(
-  'distributed-transaction', 11, 'Distributed Transaction', '🌐',
-  '2PC, Saga Pattern, Outbox Pattern cho giao dịch phân tán.',
-  'E-commerce Microservice.',
-  [
+export default {
+  slug: 'distributed-transaction',
+  order: 11,
+  title: 'Distributed Transaction',
+  emoji: '🌐',
+  description: '2PC, Saga Pattern, Outbox Pattern cho giao dịch phân tán.',
+  project: 'E-commerce Microservice.',
+  problems: [
+    { icon: '💥', title: 'Partial failure', desc: 'Order tạo thành công nhưng payment service down → hệ thống ở trạng thái không nhất quán: đơn hàng exists nhưng tiền chưa trừ.' },
+    { icon: '🔒', title: 'Không thể ROLLBACK cross-service', desc: 'Database ACID chỉ hoạt động trong một DB duy nhất. Khi span nhiều services, không có cơ chế rollback tự động nào.' },
+    { icon: '📡', title: 'Network failure mid-transaction', desc: 'Inventory đã bị trừ, payment đang xử lý thì network drop → không biết payment thành công hay chưa.' },
+  ],
+  concepts: [
     {
       name: 'Two Phase Commit',
       icon: '🤝',
@@ -40,5 +39,186 @@ export default makeTopic(
       tip: 'Compensating transaction phải idempotent (có thể chạy nhiều lần an toàn). Không phải mọi operation đều có compensating transaction dễ (ví dụ: email đã gửi không thể unsend).',
       example: '// Mapping: Operation → Compensating Transaction\nconst saga = [\n  {\n    action: () => orderService.create(order),\n    compensate: (orderId) => orderService.cancel(orderId)\n  },\n  {\n    action: () => inventoryService.reserve(item),\n    compensate: (reservationId) => inventoryService.release(reservationId)\n  },\n  {\n    action: () => paymentService.charge(amount),\n    compensate: (chargeId) => paymentService.refund(chargeId)\n  }\n];\n// Nếu step 3 fail → run compensate[1] rồi compensate[0]',
     },
-  ]
-)
+  ],
+  demos: [
+    {
+      id: 'saga-orchestration',
+      label: '📖 Saga Orchestrator',
+      language: 'javascript',
+      code: `// Saga Orchestrator Pattern - Order Processing
+class SagaOrchestrator {
+  constructor() {
+    this.steps = [];
+    this.executedSteps = [];
+  }
+
+  addStep(name, action, compensate) {
+    this.steps.push({ name, action, compensate });
+  }
+
+  async execute(context) {
+    console.log('🚀 Bắt đầu Saga...');
+    
+    for (const step of this.steps) {
+      try {
+        console.log(\`  ▶ Executing: \${step.name}\`);
+        const result = await step.action(context);
+        this.executedSteps.push({ step, result });
+        console.log(\`  ✅ \${step.name} thành công\`);
+      } catch (err) {
+        console.log(\`  ❌ \${step.name} thất bại: \${err.message}\`);
+        console.log('  ↩️  Bắt đầu compensate...');
+        await this.compensate(context);
+        return { success: false, error: err.message };
+      }
+    }
+    return { success: true };
+  }
+
+  async compensate(context) {
+    for (const { step, result } of [...this.executedSteps].reverse()) {
+      console.log(\`  🔄 Compensating: \${step.name}\`);
+      await step.compensate(context, result);
+    }
+  }
+}
+
+// --- Simulate Order Saga ---
+const saga = new SagaOrchestrator();
+
+saga.addStep(
+  'Create Order',
+  async (ctx) => {
+    ctx.orderId = 'ORD-' + Date.now();
+    return ctx.orderId;
+  },
+  async (ctx) => {
+    console.log(\`     Cancel order \${ctx.orderId}\`);
+  }
+);
+
+saga.addStep(
+  'Reserve Inventory',
+  async (ctx) => {
+    ctx.reservationId = 'RES-001';
+    return ctx.reservationId;
+  },
+  async (ctx) => {
+    console.log(\`     Release reservation \${ctx.reservationId}\`);
+  }
+);
+
+saga.addStep(
+  'Process Payment',
+  async (ctx) => {
+    // Simulate payment failure!
+    throw new Error('Insufficient funds');
+  },
+  async (ctx) => {
+    console.log(\`     Refund payment for order \${ctx.orderId}\`);
+  }
+);
+
+const ctx = {};
+saga.execute(ctx).then(result => {
+  console.log('\\n📊 Kết quả:', result);
+});`,
+    },
+    {
+      id: 'outbox-pattern',
+      label: '📤 Outbox Pattern',
+      language: 'javascript',
+      code: `// Transactional Outbox Pattern
+// Đảm bảo DB update + event publish là atomic
+
+class OutboxDB {
+  constructor() {
+    this.orders = [];
+    this.outbox = [];
+    this.nextId = 1;
+  }
+
+  async transaction(fn) {
+    const rollbackData = {
+      orders: [...this.orders],
+      outbox: [...this.outbox]
+    };
+    try {
+      await fn(this);
+      console.log('  ✅ Transaction committed!');
+    } catch (err) {
+      this.orders = rollbackData.orders;
+      this.outbox = rollbackData.outbox;
+      console.log('  ❌ Transaction rolled back:', err.message);
+      throw err;
+    }
+  }
+}
+
+class OrderService {
+  constructor(db, eventPublisher) {
+    this.db = db;
+    this.publisher = eventPublisher;
+  }
+
+  async createOrder(orderData) {
+    // Both DB write + outbox write in SAME transaction
+    await this.db.transaction(async (trx) => {
+      const order = { id: 'ORD-' + trx.nextId++, ...orderData, status: 'created' };
+      trx.orders.push(order);
+      console.log(\`  📝 Inserted order \${order.id} into DB\`);
+
+      // Write event to OUTBOX in same transaction
+      trx.outbox.push({
+        id: 'EVT-' + trx.nextId++,
+        event_type: 'order-created',
+        payload: JSON.stringify(order),
+        published: false,
+        created_at: Date.now()
+      });
+      console.log(\`  📋 Inserted event into outbox\`);
+    });
+  }
+}
+
+// Background relay worker
+async function outboxRelay(db, publisher) {
+  const pending = db.outbox.filter(e => !e.published);
+  console.log(\`\\n🔄 Outbox Relay: tìm thấy \${pending.length} events chưa publish\`);
+
+  for (const event of pending) {
+    console.log(\`  📤 Publishing: \${event.event_type}\`);
+    await publisher.publish(event.event_type, JSON.parse(event.payload));
+    event.published = true;
+    console.log(\`  ✅ Published & marked as done\`);
+  }
+}
+
+// --- Demo ---
+const db = new OutboxDB();
+const publisher = {
+  publish: async (type, payload) => {
+    console.log(\`     → Kafka: topic=\${type}, orderId=\${payload.id}\`);
+  }
+};
+
+const orderService = new OrderService(db, publisher);
+
+console.log('=== Tạo đơn hàng ===');
+orderService.createOrder({ userId: 'U1', amount: 299000, items: ['ProductA'] })
+  .then(() => outboxRelay(db, publisher))
+  .then(() => {
+    console.log('\\n📊 DB State:');
+    console.log('  Orders:', db.orders.length);
+    console.log('  Outbox published:', db.outbox.filter(e => e.published).length);
+  });`,
+    },
+  ],
+  interactive: null,
+  callouts: [
+    { type: 'warning', icon: '🚫', title: 'Tránh 2PC trong microservices', body: 'Two Phase Commit block resources, không chịu được network partition. Dùng Saga Pattern với eventual consistency thay thế – đây là industry standard.' },
+    { type: 'success', icon: '📤', title: 'Outbox Pattern là must-have', body: 'Luôn dùng Transactional Outbox khi cần vừa update DB vừa publish event. Không có Outbox, có thể mất events hoặc publish events khi transaction đã rollback.' },
+    { type: 'info', icon: '↩️', title: 'Compensating transaction phải idempotent', body: 'Saga compensate có thể chạy nhiều lần (do retry). Mỗi step cần xử lý trường hợp "đã compensate rồi" mà không bị lỗi.' },
+    { type: 'tip', icon: '🔭', title: 'Orchestration vs Choreography', body: 'Orchestration (central coordinator) dễ debug, dễ monitor flow. Choreography (event-driven) ít coupling hơn nhưng khó trace. Bắt đầu với Orchestration cho đến khi team quen với distributed systems.' },
+  ],
+}
