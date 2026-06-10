@@ -12,7 +12,57 @@ export default {
     { icon: '🔗', title: 'JOIN chậm', desc: 'JOIN nhiều bảng lớn mà không có index phù hợp gây query timeout.' },
     { icon: '🔄', title: 'Subquery chậm', desc: 'Subquery correlated chạy lại cho từng row của outer query.' },
   ],
-  concepts: ['B-Tree Index', 'Composite Index', 'Covering Index', 'Execution Plan', 'EXPLAIN ANALYZE', 'Index Selectivity', 'Query Planner'],
+  concepts: [
+    {
+      name: 'B-Tree Index',
+      icon: '🌳',
+      explain: 'B-Tree (Balanced Tree) là cấu trúc dữ liệu phổ biến nhất cho index trong PostgreSQL/MySQL. Dữ liệu được lưu dạng cây cân bằng, cho phép tìm kiếm, range query và sort với độ phức tạp O(log n).',
+      tip: 'Phù hợp với =, <, >, BETWEEN, LIKE "prefix%". Không hiệu quả với LIKE "%suffix".',
+      example: 'CREATE INDEX idx_email ON users(email);\n-- B-Tree cho phép:\n-- WHERE email = \'a@b.com\'      ✅ O(log n)\n-- WHERE email LIKE \'admin%\'     ✅ O(log n)\n-- WHERE email LIKE \'%@gmail\'    ❌ Full scan',
+    },
+    {
+      name: 'Composite Index',
+      icon: '📋',
+      explain: 'Index trên nhiều cột cùng lúc. Thứ tự cột rất quan trọng – index (A, B) chỉ hỗ trợ query trên A đơn, hoặc (A + B) kết hợp. Query chỉ trên B sẽ không dùng được index này (Left-prefix rule).',
+      tip: 'Đặt cột có selectivity cao (nhiều giá trị khác nhau) và hay dùng trong WHERE lên trước.',
+      example: 'CREATE INDEX idx_status_date ON orders(status, created_at);\n\n-- ✅ Dùng được index:\nWHERE status = \'pending\'\nWHERE status = \'pending\' AND created_at > \'2024-01-01\'\n\n-- ❌ Không dùng được (bỏ qua leading column):\nWHERE created_at > \'2024-01-01\'',
+    },
+    {
+      name: 'Covering Index',
+      icon: '🛡️',
+      explain: 'Covering Index chứa đủ tất cả cột mà query cần (cả WHERE lẫn SELECT), giúp database không cần quay lại đọc table gốc (Index Only Scan). Đây là kỹ thuật tối ưu mạnh nhất cho read-heavy queries.',
+      tip: 'Dùng INCLUDE trong PostgreSQL để thêm cột vào index mà không ảnh hưởng thứ tự sắp xếp.',
+      example: '-- Query cần: status, created_at, amount\nCREATE INDEX idx_covering\n  ON orders(status, created_at)\n  INCLUDE (amount);   -- ← cột extra, không sort\n\n-- EXPLAIN sẽ hiện "Index Only Scan" → ⚡ nhanh nhất!',
+    },
+    {
+      name: 'Execution Plan',
+      icon: '🗺️',
+      explain: 'Execution Plan là kế hoạch mà Query Planner tạo ra để thực thi SQL. Nó cho biết database sẽ dùng cách nào: Seq Scan, Index Scan, Hash Join, Nested Loop... Đọc được execution plan giúp bạn biết bottleneck ở đâu.',
+      tip: 'Đọc từ trong ra ngoài (inner node thực thi trước). Chú ý "cost" và "actual time".',
+      example: 'EXPLAIN ANALYZE SELECT * FROM orders WHERE status = \'pending\';\n\n-- Output:\n-- Seq Scan on orders  (cost=0..15420 rows=125000)\n--   Filter: (status = \'pending\')\n--   Rows Removed by Filter: 375000  ← BAD!\n--   Actual time: 245ms',
+    },
+    {
+      name: 'EXPLAIN ANALYZE',
+      icon: '🔬',
+      explain: 'EXPLAIN cho thấy kế hoạch dự kiến; EXPLAIN ANALYZE thực sự chạy query và so sánh ước tính vs thực tế. Dùng để phát hiện cases database đánh giá sai số rows (misestimate) dẫn đến chọn sai plan.',
+      tip: 'Thêm BUFFERS để thấy cache hit/miss. Dùng EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) để xuất JSON đẹp hơn.',
+      example: 'EXPLAIN (ANALYZE, BUFFERS)\nSELECT * FROM orders\nJOIN users ON orders.user_id = users.id\nWHERE orders.status = \'pending\';\n\n-- Chú ý:\n-- "Seq Scan"    → cần index\n-- "Hash Join"   → có thể chậm với dataset lớn\n-- "Index Scan"  → tốt\n-- "Index Only"  → tốt nhất ⚡',
+    },
+    {
+      name: 'Index Selectivity',
+      icon: '🎯',
+      explain: 'Selectivity = số giá trị unique / tổng số rows. Giá trị gần 1.0 = high selectivity = index rất hiệu quả. Cột boolean (true/false) có selectivity ~0.5 → index thường không có ích (database sẽ chọn Seq Scan).',
+      tip: 'Rule of thumb: index chỉ được dùng khi query trả về < 5-15% rows. Cột gender, status ít giá trị → low selectivity.',
+      example: '-- Kiểm tra selectivity:\nSELECT\n  COUNT(DISTINCT email) * 1.0 / COUNT(*) AS email_sel,   -- ~1.0 ✅\n  COUNT(DISTINCT status) * 1.0 / COUNT(*) AS status_sel  -- ~0.004 ❌\nFROM orders;\n\n-- email: 0.99 → index rất hiệu quả\n-- status: 0.004 → index ít có giá trị',
+    },
+    {
+      name: 'Query Planner',
+      icon: '🤖',
+      explain: 'Query Planner (hay Query Optimizer) là bộ não của database – nó phân tích nhiều cách thực thi query và chọn cách rẻ nhất dựa trên statistics (số rows, distribution của data). Statistics được update bởi ANALYZE.',
+      tip: 'Nếu planner chọn sai plan, chạy ANALYZE để cập nhật statistics. Có thể dùng pg_hint_plan để gợi ý planner.',
+      example: '-- Cập nhật statistics thủ công:\nANALYZE orders;\n\n-- Xem statistics của cột:\nSELECT * FROM pg_stats\nWHERE tablename = \'orders\'\n  AND attname = \'status\';\n\n-- Planner dùng n_distinct, correlation\n-- để ước tính rows và chọn join method',
+    },
+  ],
   demos: [
     {
       id: 'full-scan-vs-index',

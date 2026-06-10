@@ -8,7 +8,57 @@ export default {
   problems: [
     { icon: '💥', title: 'ORM sinh quá nhiều query', desc: 'Load 100 posts → ORM chạy thêm 100 query lấy author từng post. Tổng: 101 queries cho dữ liệu lẽ ra cần 1 query!' },
   ],
-  concepts: ['JOIN', 'Eager Loading', 'Fetch Join', 'Entity Graph', 'DataLoader', 'Batch Loading', 'select_related'],
+  concepts: [
+    {
+      name: 'JOIN',
+      icon: '🔗',
+      explain: 'SQL JOIN kết hợp nhiều bảng thành một query duy nhất thay vì nhiều queries riêng lẻ. Là cách fix N+1 đơn giản nhất và hiệu quả nhất. Database optimizer có thể chọn join algorithm tốt nhất (Hash Join, Nested Loop, Merge Join).',
+      tip: 'JOIN không phải lúc nào cũng tốt hơn – với large datasets và 1-to-many relationship, JOIN có thể sinh ra nhiều duplicate rows. Cân nhắc Batch Loading trong trường hợp đó.',
+      example: '-- ❌ N+1: 1 query posts + N queries users\nconst posts = await Post.findAll();\nfor (const post of posts) {\n  post.author = await User.findById(post.userId); // N queries!\n}\n\n-- ✅ JOIN: 1 query duy nhất\nSELECT posts.*, users.name, users.avatar\nFROM posts\nJOIN users ON posts.user_id = users.id;',
+    },
+    {
+      name: 'Eager Loading',
+      icon: '⚡',
+      explain: 'Eager Loading load các relationship ngay khi query object chính, thay vì chờ access (lazy loading). ORM cung cấp syntax để declare: JPA @ManyToOne(fetch=EAGER), Sequelize include:[], Django select_related(), Rails includes().',
+      tip: 'Cẩn thận với "Eager Loading Trap": eager load quá nhiều relations không cần thiết sẽ tốn bandwidth và memory. Chỉ eager load những gì sẽ dùng.',
+      example: '// Sequelize Eager Loading:\nconst posts = await Post.findAll({\n  include: [{\n    model: User,\n    attributes: ["name", "avatar"]\n  }]\n});\n// → 1 query với JOIN\n\n// Django:\nPost.objects.select_related("author")  # 1 query JOIN\nPost.objects.prefetch_related("tags")  # 2 queries + Python join',
+    },
+    {
+      name: 'Fetch Join',
+      icon: '🎯',
+      explain: 'Fetch Join là cú pháp trong JPQL (JPA/Hibernate) để eager load relationship: "JOIN FETCH post.author". Sinh ra SQL JOIN thay vì N queries riêng lẻ. Cần phân biệt với regular JOIN (không load entity vào memory).',
+      tip: 'Tránh Fetch Join với Collection (OneToMany, ManyToMany) khi dùng pagination – sẽ gây MultipleBagFetchException hoặc pagination sai. Dùng @EntityGraph hoặc BatchSize thay thế.',
+      example: '// JPQL Fetch Join:\n@Query("SELECT p FROM Post p JOIN FETCH p.author"\n       + " WHERE p.published = true")\nList<Post> findPublishedWithAuthor();\n\n// → Generates:\n// SELECT p.*, u.* FROM posts p\n// JOIN users u ON p.user_id = u.id\n// WHERE p.published = true',
+    },
+    {
+      name: 'Entity Graph',
+      icon: '🗂️',
+      explain: 'Entity Graph (JPA 2.1+) cho phép định nghĩa graph của entities cần load một cách linh hoạt, không cần sửa query. Có thể định nghĩa qua annotation (@NamedEntityGraph) hoặc dynamic (EntityGraph API). Giải pháp tốt hơn @ManyToOne(fetch=EAGER).',
+      tip: 'Entity Graph cho phép load khác nhau cho từng use case: ví dụ ListPage load lightweight, DetailPage load đầy đủ relations. Tránh global EAGER fetch.',
+      example: '@NamedEntityGraph(\n  name = "post.withAuthorAndTags",\n  attributeNodes = {\n    @NamedAttributeNode("author"),\n    @NamedAttributeNode("tags")\n  }\n)\n@Entity\npublic class Post { ... }\n\n// Use:\nEntityGraph graph = em.getEntityGraph("post.withAuthorAndTags");\nMap hints = Map.of("jakarta.persistence.loadgraph", graph);\nem.find(Post.class, id, hints);',
+    },
+    {
+      name: 'DataLoader',
+      icon: '📦',
+      explain: 'DataLoader là pattern/library (phổ biến trong GraphQL) giải quyết N+1 bằng cách batch các loads riêng lẻ thành một request duy nhất. Tất cả các load được trigger trong cùng một tick sẽ được gom lại và gọi batch function một lần.',
+      tip: 'DataLoader không chỉ dùng cho GraphQL – có thể dùng bất cứ đâu có N+1. Facebook tạo ra nó cho Relay GraphQL.',
+      example: '// GraphQL DataLoader pattern:\nconst userLoader = new DataLoader(async (userIds) => {\n  // Chỉ gọi 1 lần với tất cả userIds!\n  const users = await User.findAll({ where: { id: userIds } });\n  return userIds.map(id => users.find(u => u.id === id));\n});\n\n// Resolver:\nPost.author = (post) => userLoader.load(post.userId);\n// 100 posts → 100 calls → batched thành 1 DB query!',
+    },
+    {
+      name: 'Batch Loading',
+      icon: '🎁',
+      explain: 'Batch Loading: thay vì load từng item một, collect tất cả IDs cần load, sau đó query WHERE id IN (...) một lần. Giảm N+1 queries xuống còn 2 queries (query chính + query batch). Hibernate @BatchSize implement pattern này.',
+      tip: 'IN clause hiệu quả với < 1000 IDs. Với số lượng lớn hơn, chia thành chunks. PostgreSQL và MySQL đều optimize IN clause tốt khi dùng với index.',
+      example: '// Batch Loading pattern:\nconst posts = await getAllPosts(); // Query 1\n\n// Collect unique author IDs\nconst authorIds = [...new Set(posts.map(p => p.authorId))];\n\n// Batch load - 1 query thay vì N queries!\nconst authors = await User.findAll({\n  where: { id: { [Op.in]: authorIds } }\n}); // Query 2\n\nconst authorMap = new Map(authors.map(a => [a.id, a]));\nposts.forEach(p => p.author = authorMap.get(p.authorId));',
+    },
+    {
+      name: 'select_related',
+      icon: '🐍',
+      explain: 'select_related() là Django ORM method thực hiện SQL JOIN để load ForeignKey và OneToOne relationships trong 1 query. prefetch_related() dùng cho ManyToMany và reverse ForeignKey với 2 queries riêng biệt rồi join ở Python.',
+      tip: 'Dùng select_related cho ForeignKey (JOIN). Dùng prefetch_related cho ManyToMany và reverse FK. Kết hợp cả hai khi cần.',
+      example: '# ❌ N+1\nposts = Post.objects.all()\nfor post in posts:\n    print(post.author.name)  # N queries!\n\n# ✅ select_related (JOIN)\nposts = Post.objects.select_related("author").all()\n# 1 query với JOIN\n\n# ✅ prefetch_related (M2M)\nposts = Post.objects.prefetch_related("tags").all()\n# 2 queries + Python join',
+    },
+  ],
   demos: [
     {
       id: 'problem',

@@ -1,4 +1,5 @@
 import { useParams, Navigate, Link } from 'react-router-dom'
+import { useState } from 'react'
 import { getTopic, getLevel } from '../data/index'
 import CodeRunner from '../components/CodeRunner/CodeRunner'
 import InteractiveBox from '../components/TopicContent/InteractiveBox'
@@ -52,15 +53,9 @@ export default function TopicPage() {
 
       {/* Concepts */}
       {topic.concepts?.length > 0 && (
-        <section>
-          <SectionTitle>📖 Kiến thức cần học</SectionTitle>
-          <div className={styles.conceptList}>
-            {topic.concepts.map((c, i) => (
-              <span key={i} className={styles.conceptTag}>📚 {c}</span>
-            ))}
-          </div>
-        </section>
+        <ConceptSection concepts={topic.concepts} levelColor={level.color} />
       )}
+
 
       {/* Code Demos */}
       {topic.demos?.length > 0 && (
@@ -114,4 +109,69 @@ export default function TopicPage() {
 
 function SectionTitle({ children }) {
   return <h2 className={styles.sectionTitle}>{children}</h2>
+}
+
+function ConceptSection({ concepts, levelColor }) {
+  const [active, setActive] = useState(null)
+
+  // Support both string[] and object[] formats
+  const items = concepts.map((c) =>
+    typeof c === 'string' ? { name: c, icon: '📚' } : c
+  )
+
+  const activeConcept = active !== null ? items[active] : null
+
+  return (
+    <section>
+      <SectionTitle>📖 Kiến thức cần học</SectionTitle>
+      <p className={styles.conceptHint}>Click vào một khái niệm để xem giải thích chi tiết</p>
+      <div className={styles.conceptList}>
+        {items.map((c, i) => (
+          <button
+            key={i}
+            className={`${styles.conceptTag} ${active === i ? styles.conceptTagActive : ''}`}
+            style={{ '--level-color': levelColor }}
+            onClick={() => setActive(active === i ? null : i)}
+          >
+            <span className={styles.conceptTagIcon}>{c.icon ?? '📚'}</span>
+            {c.name}
+            <span className={styles.conceptTagChevron}>
+              {active === i ? '▲' : '▼'}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {activeConcept && (
+        <div className={styles.conceptDetail} key={active}>
+          <div className={styles.conceptDetailHeader}>
+            <span className={styles.conceptDetailIcon}>{activeConcept.icon ?? '📚'}</span>
+            <h3 className={styles.conceptDetailName}>{activeConcept.name}</h3>
+            <button className={styles.conceptDetailClose} onClick={() => setActive(null)}>✕</button>
+          </div>
+
+          <p className={styles.conceptDetailExplain}>{activeConcept.explain ?? 'Chưa có nội dung giải thích.'}</p>
+
+          {activeConcept.tip && (
+            <div className={styles.conceptDetailTip}>
+              <span>💡</span>
+              <span>{activeConcept.tip}</span>
+            </div>
+          )}
+
+          {activeConcept.example && (
+            <div className={styles.conceptDetailCode}>
+              <div className={styles.conceptDetailCodeHeader}>
+                <span className={styles.conceptDetailCodeDots}>
+                  <span /><span /><span />
+                </span>
+                <span className={styles.conceptDetailCodeLabel}>Ví dụ</span>
+              </div>
+              <pre className={styles.conceptDetailPre}><code>{activeConcept.example}</code></pre>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
 }

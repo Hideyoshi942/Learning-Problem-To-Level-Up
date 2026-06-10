@@ -1,26 +1,83 @@
-// Level 2 stubs – sẽ thêm nội dung đầy đủ sau
-const stub = (slug, order, title, emoji, description, project, problems, concepts) => ({
-  slug, order, title, emoji, description, project, problems, concepts,
-  demos: [{
-    id: 'coming-soon',
-    label: '🚧 Coming Soon',
-    language: 'javascript',
-    code: `// Nội dung đang được chuẩn bị...\nconsole.log('${title} – demos coming soon!');`,
-  }],
-  interactive: null,
-  callouts: [
-    { type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Nội dung chi tiết cho "${title}" đang được chuẩn bị. Stay tuned!` },
-  ],
-})
-
-export default stub(
-  'caching', 6, 'Caching', '⚡',
-  'Caching là kỹ thuật lưu data vào bộ nhớ nhanh để giảm load cho database. Hiểu Cache Aside, Read/Write Through, Write Back giúp tăng throughput hàng chục lần.',
-  'API đọc dữ liệu sản phẩm.',
-  [
+export default {
+  slug: 'caching',
+  order: 6,
+  title: 'Caching',
+  emoji: '⚡',
+  description: 'Caching là kỹ thuật lưu data vào bộ nhớ nhanh để giảm load cho database. Hiểu Cache Aside, Read/Write Through, Write Back giúp tăng throughput hàng chục lần.',
+  project: 'API đọc dữ liệu sản phẩm.',
+  problems: [
     { icon: '🐢', title: 'DB quá tải', desc: 'Mọi request đều hit DB dù data hiếm khi thay đổi.' },
     { icon: '💸', title: 'Cache stampede', desc: 'Cache expire → hàng nghìn request cùng hit DB một lúc.' },
     { icon: '🔄', title: 'Cache invalidation', desc: 'Data update trong DB nhưng cache vẫn trả về data cũ.' },
   ],
-  ['Cache Aside', 'Read Through', 'Write Through', 'Write Back', 'TTL', 'LRU Eviction', 'Cache Stampede', 'Redis'],
-)
+  concepts: [
+    {
+      name: 'Cache Aside',
+      icon: '🔀',
+      explain: 'Cache Aside (Lazy Loading) là pattern phổ biến nhất. Application tự quản lý cache: Read → check cache → nếu miss thì đọc DB → write vào cache. Write → update DB → invalidate cache. Application code phải handle cache logic.',
+      tip: 'Cache Aside là default choice cho hầu hết use cases. Nhược điểm: cache miss đầu tiên (cold start) sẽ chậm. Có thể warm up cache khi deploy.',
+      example: '// Cache Aside pattern:\nasync function getProduct(id) {\n  // 1. Check cache\n  const cached = await redis.get(`product:${id}`);\n  if (cached) return JSON.parse(cached); // Cache hit ✅\n\n  // 2. Cache miss → query DB\n  const product = await db.query("SELECT * FROM products WHERE id=?", [id]);\n\n  // 3. Write to cache (TTL 5 phút)\n  await redis.setex(`product:${id}`, 300, JSON.stringify(product));\n  return product;\n}',
+    },
+    {
+      name: 'Read Through',
+      icon: '📖',
+      explain: 'Read Through: Application chỉ đọc từ cache. Cache tự động đọc từ DB khi miss và populate cache. Application không biết về DB. Pattern này được support bởi các caching library như Ehcache, Caffeine, Redis với read-through config.',
+      tip: 'Read Through đơn giản hóa application code nhưng tăng coupling giữa cache và DB. Phù hợp khi dùng caching framework có sẵn.',
+      example: '// Read Through với Caffeine (Java):\nLoadingCache<Long, Product> cache = Caffeine.newBuilder()\n  .maximumSize(10_000)\n  .expireAfterWrite(5, MINUTES)\n  .build(id -> db.findProductById(id)); // Auto-load on miss\n\n// Application chỉ cần:\nProduct p = cache.get(productId); // Cache tự lo load từ DB',
+    },
+    {
+      name: 'Write Through',
+      icon: '✍️',
+      explain: 'Write Through: Mỗi khi write, application ghi vào cả cache VÀ DB đồng thời (synchronous). Cache luôn có data mới nhất → không bao giờ stale. Nhược điểm: write latency cao hơn (ghi 2 nơi), tốn cache space cho data ít read.',
+      tip: 'Write Through tốt khi read sau write ngay lập tức (read-your-writes consistency). Kết hợp với TTL để tránh cache đầy.',
+      example: '// Write Through:\nasync function updateProduct(id, data) {\n  // Ghi đồng thời cả 2\n  await Promise.all([\n    db.update("UPDATE products SET ... WHERE id=?", [id]),\n    redis.setex(`product:${id}`, 300, JSON.stringify(data))\n  ]);\n  return data;\n}\n// Nhược điểm: nếu DB fail, cache có data mới nhưng DB không',
+    },
+    {
+      name: 'Write Back',
+      icon: '💾',
+      explain: 'Write Back (Write Behind): Ghi vào cache trước, async flush xuống DB sau (có delay). Write latency cực thấp. Nhưng rủi ro mất data nếu cache server crash trước khi flush. Dùng khi write-heavy và có thể chấp nhận eventual consistency.',
+      tip: 'Write Back phức tạp để implement đúng. Chỉ dùng khi write performance là priority #1 và có thể chịu mất một lượng nhỏ data (ví dụ: view counter, analytics).',
+      example: '// Write Back: ghi cache trước, flush DB sau\nasync function incrementViewCount(postId) {\n  // Write to cache immediately (fast!)\n  await redis.incr(`views:${postId}`);\n  // Async batch flush mỗi 10 giây\n  // (nếu server crash trong 10s → mất count)\n}\n// Background job mỗi 10s:\nconst views = await redis.get(`views:${postId}`);\nawait db.update(`UPDATE posts SET views=${views} WHERE id=?`, [postId]);',
+    },
+    {
+      name: 'TTL',
+      icon: '⏰',
+      explain: 'TTL (Time To Live) là thời gian sống của cache entry. Sau TTL, cache tự động expire và xóa entry. TTL là cách đơn giản nhất để đảm bảo cache không stale quá lâu. Trade-off: TTL ngắn → cache miss nhiều; TTL dài → data stale.',
+      tip: 'Chọn TTL dựa vào tần suất thay đổi của data. Product catalog: 5-15 phút. User profile: 1-5 phút. Session: 30 phút. Real-time price: không nên cache hoặc TTL rất ngắn.',
+      example: '// Redis TTL:\nawait redis.setex("product:123", 300, data); // 300 giây = 5 phút\nawait redis.set("session:abc", data, "EX", 1800); // 30 phút\n\n// Kiểm tra TTL còn lại:\nconst ttl = await redis.ttl("product:123"); // 295 (giây còn lại)\n\n// Sliding TTL (reset khi access):\nawait redis.getex("product:123", "EX", 300); // Reset TTL khi đọc',
+    },
+    {
+      name: 'LRU Eviction',
+      icon: '🗑️',
+      explain: 'LRU (Least Recently Used) Eviction: khi cache đầy, xóa những entry ít được dùng gần đây nhất. Redis hỗ trợ nhiều policy: allkeys-lru, volatile-lru, allkeys-lfu (Least Frequently Used), allkeys-random. LRU phù hợp cho most workloads.',
+      tip: 'Redis config: maxmemory 2gb, maxmemory-policy allkeys-lru. Nếu hot data thường xuyên bị evict → tăng memory hoặc dùng LFU policy.',
+      example: '// Redis eviction policies:\n// allkeys-lru    → evict LRU từ toàn bộ keys (recommended)\n// volatile-lru   → evict LRU chỉ keys có TTL\n// allkeys-lfu    → evict LFU (tốt hơn LRU cho skewed access)\n// allkeys-random → random eviction\n// noeviction     → throw error khi đầy (không khuyến khích)\n\n// redis.conf:\n// maxmemory 2gb\n// maxmemory-policy allkeys-lru',
+    },
+    {
+      name: 'Cache Stampede',
+      icon: '🐂',
+      explain: 'Cache Stampede (Thundering Herd): khi một popular cache key expire, hàng trăm/nghìn requests đồng thời miss cache và cùng hit DB → DB bị overload. Thường xảy ra với high-traffic items và đồng bộ TTL.',
+      tip: 'Giải pháp: (1) Probabilistic early recompute – refresh trước khi expire, (2) Mutex/Lock – chỉ 1 request fill cache, (3) Stale while revalidate – serve stale trong khi recompute.',
+      example: '// Fix: Mutex Lock pattern\nasync function getWithLock(key, fetchFn, ttl) {\n  const cached = await redis.get(key);\n  if (cached) return JSON.parse(cached);\n\n  // Chỉ 1 request được lock để fill cache\n  const lockKey = `lock:${key}`;\n  const locked = await redis.set(lockKey, 1, "NX", "EX", 10);\n  if (!locked) {\n    await sleep(100); // Đợi lock release\n    return getWithLock(key, fetchFn, ttl); // Retry\n  }\n\n  const data = await fetchFn();\n  await redis.setex(key, ttl, JSON.stringify(data));\n  await redis.del(lockKey);\n  return data;\n}',
+    },
+    {
+      name: 'Redis',
+      icon: '🔴',
+      explain: 'Redis (Remote Dictionary Server) là in-memory data store phổ biến nhất cho caching. Hỗ trợ String, Hash, List, Set, Sorted Set, Stream. Single-threaded nên không có race condition khi dùng atomic commands. Persistence qua RDB snapshots và AOF logging.',
+      tip: 'Redis Cluster cho horizontal scaling. Redis Sentinel cho high availability. Dùng Redis Pub/Sub hoặc Streams cho real-time messaging. Tránh KEYS * lệnh trong production (blocking).',
+      example: '// Redis data types:\nawait redis.set("str", "hello");           // String\nawait redis.hset("user:1", "name", "Alice"); // Hash\nawait redis.lpush("queue", "job1");          // List\nawait redis.sadd("tags", "nodejs");          // Set\nawait redis.zadd("leaderboard", 100, "Alice"); // Sorted Set\n\n// Atomic increment (thread-safe):\nawait redis.incr("view_count"); // không cần lock!\n\n// Pipeline (batch commands):\nconst pipe = redis.pipeline();\npipe.get("a"); pipe.get("b"); pipe.get("c");\nconst results = await pipe.exec(); // 1 round trip',
+    },
+  ],
+  demos: [{
+    id: 'coming-soon',
+    label: '🚧 Coming Soon',
+    language: 'javascript',
+    code: `// Nội dung đang được chuẩn bị...\nconsole.log('Caching – demos coming soon!');`,
+  }],
+  interactive: null,
+  callouts: [
+    { type: 'success', icon: '⚡', title: 'Cache Aside là default', body: 'Dùng Cache Aside cho hầu hết use cases. Simple, flexible, và dễ debug khi có vấn đề.' },
+    { type: 'warning', icon: '🐂', title: 'Cache Stampede', body: 'Dùng Mutex Lock hoặc Probabilistic Early Expiration để tránh stampede khi cache expire.' },
+    { type: 'danger', icon: '🔄', title: 'Cache Invalidation', body: 'Invalidate cache ngay khi DB update. Stale data là nguồn gốc của nhiều bugs khó tìm.' },
+  ],
+}

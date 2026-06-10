@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom'
 import { LEVELS, TOTAL_TOPICS } from '../data/index'
 import useProgressStore from '../store/useProgressStore'
+import { useState } from 'react'
 import styles from './Home.module.css'
 
 export default function Home() {
-  const { totalDone, countDoneInLevel } = useProgressStore()
+  const { totalDone, countDoneInLevel, isDone } = useProgressStore()
   const done = totalDone()
   const pct  = Math.round((done / TOTAL_TOPICS) * 100)
+  const [activeFilter, setActiveFilter] = useState('all')
 
   return (
     <div className={`${styles.page} animate-fade-in`}>
@@ -61,9 +63,14 @@ export default function Home() {
 
               <div className={styles.levelTopics}>
                 {level.topics.map((t) => (
-                  <span key={t.slug} className={styles.topicChip}>
+                  <Link
+                    key={t.slug}
+                    to={`/level/${level.id}/topic/${t.slug}`}
+                    className={styles.topicChip}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {t.emoji} {t.title}
-                  </span>
+                  </Link>
                 ))}
               </div>
 
@@ -81,6 +88,69 @@ export default function Home() {
             </Link>
           )
         })}
+      </div>
+
+      {/* Knowledge Index */}
+      <div className={styles.knowledgeIndex}>
+        <div className={styles.indexHeader}>
+          <div>
+            <h2 className={styles.indexTitle}>📚 Knowledge Index</h2>
+            <p className={styles.indexSubtitle}>Tất cả {TOTAL_TOPICS} bài học – click để học ngay</p>
+          </div>
+          <div className={styles.filterTabs}>
+            <button
+              className={`${styles.filterTab} ${activeFilter === 'all' ? styles.filterActive : ''}`}
+              onClick={() => setActiveFilter('all')}
+            >
+              Tất cả
+            </button>
+            {LEVELS.map((level) => (
+              <button
+                key={level.id}
+                className={`${styles.filterTab} ${activeFilter === String(level.id) ? styles.filterActive : ''}`}
+                style={{ '--level-color': level.color }}
+                onClick={() => setActiveFilter(String(level.id))}
+              >
+                {level.emoji} Lv{level.id}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {LEVELS.filter((level) => activeFilter === 'all' || String(level.id) === activeFilter).map((level) => (
+          <div key={level.id} className={styles.indexLevelSection}>
+            <div className={styles.indexLevelLabel} style={{ '--level-color': level.color }}>
+              <span className={styles.indexLevelDot} />
+              <span>{level.emoji} Level {level.id} · {level.title}</span>
+              <span className={styles.indexLevelCount}>{level.topics.length} topics</span>
+            </div>
+            <div className={styles.indexTopicGrid}>
+              {level.topics.map((topic, i) => {
+                const topicDone = isDone(level.id, topic.slug)
+                return (
+                  <Link
+                    key={topic.slug}
+                    to={`/level/${level.id}/topic/${topic.slug}`}
+                    className={`${styles.indexTopicCard} ${topicDone ? styles.indexTopicDone : ''}`}
+                    style={{ '--level-color': level.color, animationDelay: `${i * 40}ms` }}
+                  >
+                    <div className={styles.indexTopicTop}>
+                      <span className={styles.indexTopicEmoji}>{topic.emoji}</span>
+                      <span className={styles.indexTopicOrder}>#{String(topic.order).padStart(2, '0')}</span>
+                      {topicDone && <span className={styles.indexTopicCheck}>✓</span>}
+                    </div>
+                    <h3 className={styles.indexTopicTitle}>{topic.title}</h3>
+                    <p className={styles.indexTopicDesc}>{topic.description?.slice(0, 80)}…</p>
+                    <div className={styles.indexTopicMeta}>
+                      <span>{topic.concepts?.length ?? 0} khái niệm</span>
+                      <span className={styles.indexLearnBtn}>Học ngay →</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Roadmap CTA */}

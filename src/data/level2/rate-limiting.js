@@ -1,17 +1,68 @@
-const stub = (slug, order, title, emoji, description, project, problems, concepts) => ({
-  slug, order, title, emoji, description, project, problems, concepts,
-  demos: [{ id: 'coming-soon', label: '🚧 Coming Soon', language: 'javascript', code: `console.log('${title} – coming soon!');` }],
-  interactive: null,
-  callouts: [{ type: 'info', icon: '🚧', title: 'Đang phát triển', body: `Nội dung cho "${title}" đang được chuẩn bị!` }],
-})
-
-export default stub(
-  'rate-limiting', 7, 'Rate Limiting', '🚦',
-  'Rate Limiting bảo vệ API khỏi bị lạm dụng và DDoS. Token Bucket, Leaky Bucket, Sliding Window là 3 thuật toán phổ biến nhất.',
-  'API Gateway.',
-  [
+export default {
+  slug: 'rate-limiting',
+  order: 7,
+  title: 'Rate Limiting',
+  emoji: '🚦',
+  description: 'Rate Limiting bảo vệ API khỏi bị lạm dụng và DDoS. Token Bucket, Leaky Bucket, Sliding Window là 3 thuật toán phổ biến nhất.',
+  project: 'API Gateway.',
+  problems: [
     { icon: '🔥', title: 'API bị abuse', desc: 'Bot gọi API hàng nghìn lần/giây, làm hệ thống quá tải.' },
     { icon: '💸', title: 'Cost overrun', desc: 'Unlimited API calls tăng chi phí cloud không kiểm soát.' },
   ],
-  ['Token Bucket', 'Leaky Bucket', 'Sliding Window Log', 'Sliding Window Counter', 'Fixed Window', 'Redis Rate Limiter'],
-)
+  concepts: [
+    {
+      name: 'Token Bucket',
+      icon: '🪣',
+      explain: 'Token Bucket: bucket chứa tối đa capacity tokens, được refill với tốc độ rate tokens/giây. Mỗi request tiêu thụ 1 token. Nếu bucket rỗng → reject request. Cho phép burst traffic ngắn hạn (tiêu hết tokens trong bucket).',
+      tip: 'Token Bucket là thuật toán phổ biến nhất cho API rate limiting. AWS API Gateway, Nginx, và hầu hết API gateways đều dùng Token Bucket. Cho phép burst tự nhiên.',
+      example: '// Token Bucket với Redis:\nconst CAPACITY = 10;  // tối đa 10 tokens\nconst RATE = 1;       // refill 1 token/giây\n\nasync function isAllowed(userId) {\n  const key = `bucket:${userId}`;\n  const now = Date.now() / 1000;\n  const bucket = await redis.hgetall(key);\n\n  const tokens = bucket ? parseFloat(bucket.tokens) : CAPACITY;\n  const lastRefill = bucket ? parseFloat(bucket.lastRefill) : now;\n\n  // Refill tokens\n  const elapsed = now - lastRefill;\n  const newTokens = Math.min(CAPACITY, tokens + elapsed * RATE);\n\n  if (newTokens < 1) return false; // Rate limited!\n  await redis.hset(key, "tokens", newTokens - 1, "lastRefill", now);\n  return true;\n}',
+    },
+    {
+      name: 'Leaky Bucket',
+      icon: '💧',
+      explain: 'Leaky Bucket: requests vào queue (bucket), được xử lý với tốc độ cố định (rate). Bucket đầy → reject request. Khác Token Bucket ở chỗ không cho phép burst – output luôn đều đặn. Giống như bộ đệm (queue) có rate-controlled consumer.',
+      tip: 'Leaky Bucket đảm bảo smooth traffic, không có burst. Phù hợp khi downstream service nhạy cảm với spike traffic. Khó implement distributed hơn Token Bucket.',
+      example: '// Leaky Bucket concept:\n// Requests → [Queue: max_size=10] → Process at rate=5 req/s\n\nclass LeakyBucket {\n  constructor(capacity, rate) {\n    this.queue = [];\n    this.capacity = capacity;  // Max queue size\n    this.rate = rate;          // Process rate (req/s)\n    this.processQueue();\n  }\n\n  add(request) {\n    if (this.queue.length >= this.capacity) {\n      return false; // Drop! Bucket full\n    }\n    this.queue.push(request);\n    return true;\n  }\n\n  processQueue() {\n    setInterval(() => {\n      if (this.queue.length > 0) {\n        const req = this.queue.shift();\n        this.handle(req); // Process at fixed rate\n      }\n    }, 1000 / this.rate);\n  }\n}',
+    },
+    {
+      name: 'Sliding Window Log',
+      icon: '📜',
+      explain: 'Sliding Window Log: lưu timestamp của mỗi request trong window. Khi có request mới, xóa timestamps cũ ngoài window và đếm số requests còn lại. Chính xác nhất nhưng tốn memory O(n) vì phải lưu từng request timestamp.',
+      tip: 'Sliding Window Log chính xác 100% nhưng memory usage tỉ lệ với request count. Với high traffic (10,000 req/s/user), đây là vấn đề. Dùng Sliding Window Counter thay thế.',
+      example: '// Sliding Window Log với Redis Sorted Set:\nasync function isAllowed(userId, windowMs, limit) {\n  const now = Date.now();\n  const key = `swlog:${userId}`;\n\n  // Xóa timestamps cũ\n  await redis.zremrangebyscore(key, 0, now - windowMs);\n\n  // Đếm requests trong window\n  const count = await redis.zcard(key);\n  if (count >= limit) return false;\n\n  // Thêm request hiện tại\n  await redis.zadd(key, now, `${now}-${Math.random()}`);\n  await redis.pexpire(key, windowMs);\n  return true;\n}',
+    },
+    {
+      name: 'Sliding Window Counter',
+      icon: '🔢',
+      explain: 'Sliding Window Counter là cách xấp xỉ Sliding Window Log nhưng dùng ít memory hơn: kết hợp 2 Fixed Window counter (window hiện tại và window trước), nội suy theo vị trí trong window hiện tại. Cloudflare dùng approach này.',
+      tip: 'Sliding Window Counter sai số tối đa ~(1/window_count) %, rất chấp nhận được. Memory usage chỉ O(1) thay vì O(n). Best choice cho production.',
+      example: '// Sliding Window Counter:\nasync function isAllowed(userId, windowSec, limit) {\n  const now = Math.floor(Date.now() / 1000);\n  const currentWindow = Math.floor(now / windowSec);\n  const prevWindow = currentWindow - 1;\n\n  const [prevCount, currCount] = await redis.mget(\n    `rl:${userId}:${prevWindow}`,\n    `rl:${userId}:${currentWindow}`\n  );\n\n  // Vị trí trong window hiện tại (0.0 → 1.0)\n  const elapsed = (now % windowSec) / windowSec;\n\n  // Nội suy: prev_weight × prev + curr\n  const count = (1 - elapsed) * (prevCount || 0) + (currCount || 0);\n  if (count >= limit) return false;\n\n  await redis.incr(`rl:${userId}:${currentWindow}`);\n  await redis.expire(`rl:${userId}:${currentWindow}`, windowSec * 2);\n  return true;\n}',
+    },
+    {
+      name: 'Fixed Window',
+      icon: '🪟',
+      explain: 'Fixed Window: đếm requests trong window cố định (ví dụ: mỗi phút từ 00 đến 59 giây). Đơn giản nhất nhưng có biên giới window exploit: 100 req cuối window cũ + 100 req đầu window mới = 200 req trong 1 giây.',
+      tip: 'Fixed Window đủ tốt cho nhiều use cases đơn giản. Dùng khi burst attack ngắn không phải vấn đề (ví dụ: limit 1000 req/day thay vì 10 req/s).',
+      example: '// Fixed Window với Redis:\nasync function isAllowed(userId, limit) {\n  // Window = phút hiện tại\n  const window = Math.floor(Date.now() / 60000);\n  const key = `fw:${userId}:${window}`;\n\n  const count = await redis.incr(key);\n  if (count === 1) await redis.expire(key, 60); // Set TTL\n\n  return count <= limit;\n}\n// ⚠️ Boundary issue:\n// Window 1 (T=59s): 100 requests → OK\n// Window 2 (T=60s): 100 requests → OK\n// Trong 1s: 200 requests vượt limit thực tế!',
+    },
+    {
+      name: 'Redis Rate Limiter',
+      icon: '🔴',
+      explain: 'Redis là backend phổ biến nhất cho distributed rate limiting. Dùng Redis Lua script để đảm bảo atomic check-and-increment. Redis cũng có module redis-cell với thuật toán GCRA (Generic Cell Rate Algorithm) rất hiệu quả.',
+      tip: 'Lua script trong Redis chạy atomically – không cần lock. Dùng redis-cell module hoặc library như rate-limiter-flexible (Node.js) để tiết kiệm thời gian.',
+      example: '-- Redis Lua script (atomic):\nlocal key = KEYS[1]\nlocal limit = tonumber(ARGV[1])\nlocal window = tonumber(ARGV[2])\n\nlocal current = redis.call("INCR", key)\nif current == 1 then\n  redis.call("EXPIRE", key, window)\nend\n\nif current > limit then\n  return 0  -- Rate limited\nend\nreturn 1  -- Allowed\n\n-- Node.js:\nconst allowed = await redis.eval(script, 1, key, 100, 60);',
+    },
+  ],
+  demos: [{
+    id: 'coming-soon',
+    label: '🚧 Coming Soon',
+    language: 'javascript',
+    code: `console.log('Rate Limiting – demos coming soon!');`,
+  }],
+  interactive: null,
+  callouts: [
+    { type: 'success', icon: '🪣', title: 'Token Bucket là default', body: 'Cho phép burst traffic tự nhiên. Dùng cho hầu hết API rate limiting use cases.' },
+    { type: 'info', icon: '🔢', title: 'Sliding Window Counter', body: 'Balance tốt giữa accuracy và memory efficiency. Cloudflare dùng approach này.' },
+    { type: 'warning', icon: '🪟', title: 'Fixed Window Boundary', body: 'Fixed Window có thể bị exploit tại ranh giới window. Dùng Sliding Window cho sensitive APIs.' },
+  ],
+}

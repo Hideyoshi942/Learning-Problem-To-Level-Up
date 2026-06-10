@@ -1,2 +1,73 @@
-const s=(slug,order,title,emoji,desc,project,problems,concepts)=>({slug,order,title,emoji,description:desc,project,problems,concepts,demos:[{id:'coming-soon',label:'🚧 Coming Soon',language:'javascript',code:`console.log('${title} – coming soon!');`}],interactive:null,callouts:[{type:'info',icon:'🚧',title:'Đang phát triển',body:`"${title}" đang được chuẩn bị!`}]})
-export default s('message-queue',10,'Message Queue','📨','Message Queue tách coupling giữa services, cho phép async processing và retry logic. Kafka, RabbitMQ là 2 hệ thống phổ biến nhất.','Order Service + Notification Service.',[{icon:'🔗',title:'Tight coupling',desc:'Order service gọi thẳng notification service → nếu notification fail thì order cũng fail.'},{icon:'⚡',title:'Slow synchronous flow',desc:'User phải chờ email/SMS được gửi mới nhận response.'}],['Producer/Consumer','Dead Letter Queue','At-least-once','At-most-once','Exactly-once','Kafka Partition','RabbitMQ Exchange'])
+export default {
+  slug: 'message-queue',
+  order: 10,
+  title: 'Message Queue',
+  emoji: '📨',
+  description: 'Message Queue tách coupling giữa services, cho phép async processing và retry logic. Kafka, RabbitMQ là 2 hệ thống phổ biến nhất.',
+  project: 'Order Service + Notification Service.',
+  problems: [
+    { icon: '🔗', title: 'Tight coupling', desc: 'Order service gọi thẳng notification service → nếu notification fail thì order cũng fail.' },
+    { icon: '⚡', title: 'Slow synchronous flow', desc: 'User phải chờ email/SMS được gửi mới nhận response.' },
+  ],
+  concepts: [
+    {
+      name: 'Producer/Consumer',
+      icon: '🏭',
+      explain: 'Producer tạo và gửi messages vào queue. Consumer đọc và xử lý messages. Producer và Consumer hoàn toàn decoupled – không biết nhau, chạy độc lập, có thể scale riêng. Queue là buffer đảm bảo messages không bị mất khi consumer bận.',
+      tip: 'Có thể có nhiều producers và nhiều consumers (consumer group). Consumer group trong Kafka: mỗi partition chỉ được một consumer trong group xử lý. RabbitMQ: competing consumers.',
+      example: '// Producer:\nawait kafka.producer().send({\n  topic: "order-created",\n  messages: [{\n    key: orderId,\n    value: JSON.stringify({ orderId, userId, amount })\n  }]\n});\n\n// Consumer:\nconst consumer = kafka.consumer({ groupId: "email-service" });\nawait consumer.subscribe({ topic: "order-created" });\nawait consumer.run({\n  eachMessage: async ({ message }) => {\n    const order = JSON.parse(message.value);\n    await sendConfirmationEmail(order);\n  }\n});',
+    },
+    {
+      name: 'Dead Letter Queue',
+      icon: '☠️',
+      explain: 'Dead Letter Queue (DLQ) là queue đặc biệt chứa các messages không xử lý được sau N lần retry. Thay vì bỏ message, DLQ lưu lại để debug và xử lý thủ công. Ngăn "poison pill" messages block toàn bộ queue.',
+      tip: 'Luôn cấu hình DLQ và monitoring. Setup alert khi DLQ có message. Implement dashboard để view và requeue messages từ DLQ. Đây là safety net quan trọng.',
+      example: '// RabbitMQ DLQ config:\nconst channel = await connection.createChannel();\n\n// Main queue với DLQ config:\nawait channel.assertQueue("orders", {\n  durable: true,\n  arguments: {\n    "x-dead-letter-exchange": "orders.dlx",\n    "x-dead-letter-routing-key": "orders.dead",\n    "x-max-retries": 3\n  }\n});\n\n// Dead letter queue:\nawait channel.assertQueue("orders.dead", { durable: true });\n\n// Consumer reject → moves to DLQ after 3 attempts:\nchannel.nack(msg, false, false); // requeue=false → DLQ',
+    },
+    {
+      name: 'At-least-once',
+      icon: '📬',
+      explain: 'At-least-once delivery: message được deliver ít nhất 1 lần, có thể nhiều hơn. Consumer ack message SAU khi xử lý xong. Nếu consumer crash trước khi ack → broker redeliver. Đây là default của RabbitMQ và Kafka consumer với manual commit.',
+      tip: 'At-least-once là lựa chọn phổ biến nhất. Consumer phải idempotent để xử lý duplicate an toàn. Dùng Idempotency Key hoặc check duplicate trước khi xử lý.',
+      example: '// RabbitMQ - Manual ack (at-least-once):\nchannel.consume("orders", async (msg) => {\n  try {\n    await processOrder(JSON.parse(msg.content));\n    channel.ack(msg);  // Ack SAU khi xử lý xong\n  } catch (err) {\n    channel.nack(msg, false, true); // Requeue nếu fail\n  }\n}, { noAck: false }); // noAck=false = manual ack\n\n// Kafka - Manual offset commit:\nconst { messages } = await consumer.fetch();\nfor (const msg of messages) {\n  await processMessage(msg);\n}\nawait consumer.commitOffsets(); // Commit sau khi xử lý',
+    },
+    {
+      name: 'At-most-once',
+      icon: '📭',
+      explain: 'At-most-once delivery: message được deliver tối đa 1 lần, có thể bị mất. Consumer ack message TRƯỚC khi xử lý. Nếu processing fail → message bị mất. Phù hợp cho log, metrics, analytics – nơi mất một số messages chấp nhận được. Throughput cao hơn.',
+      tip: 'Không dùng At-most-once cho financial, order, hay bất kỳ business-critical operations. Chỉ dùng cho use cases mà mất message là chấp nhận được.',
+      example: '// Kafka - Auto commit (at-most-once risk):\n// enable.auto.commit=true, auto.commit.interval.ms=5000\n// Message có thể committed offset trước khi xử lý xong\n\n// RabbitMQ autoAck (at-most-once):\nchannel.consume("logs", (msg) => {\n  // Ack ngay lập tức khi nhận (trước khi process!)\n  // Nếu crash ở đây → message mất!\n  processLog(JSON.parse(msg.content));\n}, { noAck: true }); // noAck=true = auto ack immediately',
+    },
+    {
+      name: 'Exactly-once',
+      icon: '🎯',
+      explain: 'Exactly-once: message được xử lý đúng 1 lần, không mất, không duplicate. Khó nhất trong 3 delivery semantics. Kafka hỗ trợ Exactly-once Semantics (EOS) với Idempotent Producer + Transactional API. Rất tốn tài nguyên, chỉ dùng khi thực sự cần.',
+      tip: 'Thực tế: At-least-once + Idempotent Consumer thường đủ và đơn giản hơn. Truly Exactly-once chỉ cần cho financial transactions với strict audit requirements.',
+      example: '// Kafka Exactly-once với Transactions:\nconst producer = kafka.producer({\n  transactionalId: "payment-processor-1",\n  idempotent: true\n});\nawait producer.connect();\n\nawait producer.transaction(async (txn) => {\n  await txn.send({\n    topic: "payment-completed",\n    messages: [{ value: JSON.stringify(payment) }]\n  });\n  // Commit offset và send trong cùng transaction:\n  await txn.sendOffsets({ consumer, topics: [...] });\n});\n// → Đảm bảo exactly-once end-to-end',
+    },
+    {
+      name: 'Kafka Partition',
+      icon: '🗂️',
+      explain: 'Kafka topic được chia thành nhiều partitions. Mỗi partition là ordered, immutable log. Partition là đơn vị parallelism – mỗi partition chỉ được 1 consumer trong group xử lý. Tăng partition = tăng throughput. Message có cùng key luôn vào cùng partition (ordering guarantee).',
+      tip: 'Số partition quyết định max parallelism. Partition không giảm được (chỉ tăng). Dùng key-based partitioning để đảm bảo ordering cho related events (e.g., tất cả events của cùng user_id vào cùng partition).',
+      example: '// Key-based partitioning:\nawait producer.send({\n  topic: "user-events",\n  messages: [{\n    key: userId.toString(), // → cùng partition cho cùng user\n    value: JSON.stringify(event)\n  }]\n});\n// → Tất cả events của user 123 ordered trong 1 partition\n\n// Consumer group với 3 partitions, 3 consumers:\n// Consumer 1 → Partition 0\n// Consumer 2 → Partition 1\n// Consumer 3 → Partition 2\n// → 3x throughput! ⚡',
+    },
+    {
+      name: 'RabbitMQ Exchange',
+      icon: '🐰',
+      explain: 'RabbitMQ Exchange nhận messages từ producers và route đến queues theo routing rules. 4 loại: Direct (exact key match), Topic (wildcard pattern), Fanout (broadcast đến tất cả queues), Headers (match headers thay vì routing key). Binding là connection giữa exchange và queue.',
+      tip: 'Direct Exchange cho simple routing. Topic Exchange cho flexible routing với wildcards (*, #). Fanout Exchange cho pub/sub broadcast. Dùng dead letter exchange cho error handling.',
+      example: '// Topic Exchange routing:\nawait channel.assertExchange("events", "topic", { durable: true });\n\n// Queues binding với routing patterns:\nawait channel.bindQueue("order-service", "events", "order.*");\nawait channel.bindQueue("email-service", "events", "order.created");\nawait channel.bindQueue("analytics", "events", "#"); // All\n\n// Publish:\nchannel.publish("events", "order.created", content);\n// → Routes to: order-service, email-service, analytics\nchannel.publish("events", "order.shipped", content);\n// → Routes to: order-service, analytics (only)',
+    },
+  ],
+  demos: [{
+    id: 'coming-soon', label: '🚧 Coming Soon',
+    language: 'javascript', code: `console.log('Message Queue – demos coming soon!');`,
+  }],
+  interactive: null,
+  callouts: [
+    { type: 'success', icon: '📬', title: 'At-least-once + Idempotent', body: 'Đây là pattern chuẩn. At-least-once delivery với idempotent consumer = effectively exactly-once với ít complexity hơn.' },
+    { type: 'warning', icon: '☠️', title: 'Luôn cấu hình DLQ', body: 'Dead Letter Queue là safety net. Không có DLQ = messages bị mất âm thầm khi xử lý fail.' },
+    { type: 'info', icon: '🗂️', title: 'Kafka vs RabbitMQ', body: 'Kafka: high throughput, event streaming, replay. RabbitMQ: complex routing, priority queues, short-lived messages.' },
+  ],
+}

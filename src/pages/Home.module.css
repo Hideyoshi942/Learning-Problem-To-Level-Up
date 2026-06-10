@@ -123,6 +123,16 @@
   padding: 3px 9px;
   border-radius: 6px;
   white-space: nowrap;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.18s;
+  cursor: pointer;
+}
+.topicChip:hover {
+  color: var(--level-color, var(--accent2));
+  background: color-mix(in srgb, var(--level-color, var(--accent)) 12%, transparent);
+  border-color: color-mix(in srgb, var(--level-color, var(--accent)) 35%, transparent);
+  transform: translateY(-1px);
 }
 
 .levelProgress {
@@ -183,4 +193,203 @@
 @media (max-width: 640px) {
   .heroTitle { font-size: 28px; }
   .levelsGrid { grid-template-columns: 1fr; }
+}
+
+/* ===========================
+   KNOWLEDGE INDEX
+   =========================== */
+.knowledgeIndex {
+  margin-bottom: 36px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.indexHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(99,120,255,0.04);
+}
+
+.indexTitle {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.indexSubtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.filterTabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filterTab {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.filterTab:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+.filterActive {
+  background: color-mix(in srgb, var(--level-color, var(--accent)) 15%, transparent);
+  border-color: color-mix(in srgb, var(--level-color, var(--accent)) 40%, transparent);
+  color: var(--level-color, var(--accent2));
+}
+
+.indexLevelSection {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.indexLevelSection:last-child { border-bottom: none; }
+
+.indexLevelLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.indexLevelDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--level-color, var(--accent));
+  flex-shrink: 0;
+  box-shadow: 0 0 8px var(--level-color, var(--accent));
+}
+.indexLevelCount {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.indexTopicGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.indexTopicCard {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.22s;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.35s ease both;
+}
+.indexTopicCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--level-color, var(--accent));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+}
+.indexTopicCard:hover {
+  border-color: color-mix(in srgb, var(--level-color, var(--accent)) 45%, transparent);
+  background: var(--bg-card-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+.indexTopicCard:hover::before { transform: scaleX(1); }
+
+.indexTopicDone {
+  border-color: rgba(52,211,153,0.25);
+  background: rgba(52,211,153,0.04);
+}
+.indexTopicDone:hover { border-color: rgba(52,211,153,0.5); }
+
+.indexTopicTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.indexTopicEmoji { font-size: 18px; }
+.indexTopicOrder {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--level-color, var(--accent));
+  background: color-mix(in srgb, var(--level-color, var(--accent)) 12%, transparent);
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.3px;
+}
+.indexTopicCheck {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 700;
+}
+
+.indexTopicTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  margin: 0;
+}
+
+.indexTopicDesc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  flex: 1;
+}
+
+.indexTopicMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.indexLearnBtn {
+  color: var(--level-color, var(--accent2));
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.indexTopicCard:hover .indexLearnBtn { opacity: 1; }
+
+@media (max-width: 640px) {
+  .indexHeader { flex-direction: column; }
+  .indexTopicGrid { grid-template-columns: 1fr 1fr; }
+  .knowledgeIndex { margin: 0 -4px 28px; border-radius: 8px; }
 }
