@@ -1,6 +1,21 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+// Coerce any persisted shape into a real Set.
+// Handles: array (current format), Set (in-memory), legacy `{}` produced by
+// older builds that JSON.stringify-ed a Set (Zustand v5 dropped the
+// serialize/deserialize options, so a Set silently serialized to "{}"),
+// and undefined/null.
+function toSet(value) {
+  if (value instanceof Set) return value
+  if (Array.isArray(value)) return new Set(value)
+  if (value && typeof value === 'object') {
+    // legacy: keys that were truthy were "completed"
+    return new Set(Object.keys(value).filter((k) => value[k]))
+  }
+  return new Set()
+}
+
 const useProgressStore = create(
   persist(
     (set, get) => ({
@@ -32,13 +47,14 @@ const useProgressStore = create(
     }),
     {
       name: 'backend-hub-progress',
-      // Zustand persist doesn't handle Set natively → serialize
-      serialize: (state) =>
-        JSON.stringify({ ...state, completed: [...state.completed] }),
-      deserialize: (str) => {
-        const parsed = JSON.parse(str)
-        return { ...parsed, completed: new Set(parsed.completed ?? []) }
-      },
+      // Zustand v5 removed serialize/deserialize. A Set isn't JSON-serializable,
+      // so persist only the array form via partialize, and rebuild the Set on
+      // rehydration via merge. merge also repairs the legacy `{}` corruption.
+      partialize: (state) => ({ completed: [...state.completed] }),
+      merge: (persisted, current) => ({
+        ...current,
+        completed: toSet(persisted?.completed),
+      }),
     }
   )
 )
