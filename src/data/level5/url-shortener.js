@@ -30,7 +30,7 @@ export default {
       icon: '⚡',
       explain: 'URL Shortener là read-heavy workload (99% reads, 1% writes). Cache short_url → long_url trong Redis. Cache hit rate cực cao vì 80% traffic thường đến 20% URLs (Pareto principle). TTL vô thời hạn cho permanent links, có TTL cho temporary links.',
       tip: 'Cache warm-up: pre-cache top 1000 URLs khi startup. LRU eviction phù hợp. Monitor cache hit rate – nếu thấp hơn 95% cần tăng cache size.',
-      example: 'async function redirect(shortCode) {\n  // 1. Check cache (fast path ~0.1ms):\n  const cached = await redis.get(\`url:\${shortCode}\`);\n  if (cached) {\n    await incrementClickCount(shortCode); // async\n    return cached;\n  }\n\n  // 2. Cache miss → query DB (~5-10ms):\n  const url = await db.query(\n    "SELECT original_url FROM urls WHERE short_code=?",\n    [shortCode]\n  );\n  if (!url) return null; // 404\n\n  // 3. Cache for next time:\n  await redis.set(\`url:\${shortCode}\`, url.original_url);\n  return url.original_url;\n}',
+      example: 'async function redirect(shortCode) {\n  // 1. Check cache (fast path ~0.1ms):\n  const cached = await redis.get(`url:${shortCode}`);\n  if (cached) {\n    await incrementClickCount(shortCode); // async\n    return cached;\n  }\n\n  // 2. Cache miss → query DB (~5-10ms):\n  const url = await db.query(\n    "SELECT original_url FROM urls WHERE short_code=?",\n    [shortCode]\n  );\n  if (!url) return null; // 404\n\n  // 3. Cache for next time:\n  await redis.set(`url:${shortCode}`, url.original_url);\n  return url.original_url;\n}',
     },
     {
       name: 'Database Design',

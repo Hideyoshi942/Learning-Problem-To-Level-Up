@@ -70,7 +70,7 @@ class InvertedIndex {
   tokenize(text) {
     return text
       .toLowerCase()
-      .replace(/[.,/#!$%^&*;:{}=\-_\`~()]/g, '')
+      .replace(/[.,/#!$%^&*;:{}=_~()-]/g, '')
       .split(/\\s+/)
       .filter(token => token.length > 1); // Loại bỏ stop-word rất ngắn
   }

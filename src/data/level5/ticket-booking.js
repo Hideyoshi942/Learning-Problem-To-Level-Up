@@ -47,11 +47,6 @@ export default {
       example: '// Write side - strict with lock:\nasync function reserveSeatCommand(cmd) {\n  const lock = await acquireLock(`seat:${cmd.seatId}`);\n  try {\n    // Strict consistency check:\n    const seat = await writeDb.findSeat(cmd.seatId);\n    if (seat.status !== "available") throw new ConflictError();\n    await writeDb.updateSeat(cmd.seatId, { status: "reserved", userId: cmd.userId });\n    await eventBus.emit("SeatReserved", { seatId: cmd.seatId });\n  } finally {\n    await lock.release();\n  }\n}\n\n// Read side - fast from cache:\nasync function getSeatMapQuery(eventId) {\n  const cached = await redis.get(`seatmap:${eventId}`);\n  if (cached) return JSON.parse(cached);\n  const map = await readDb.getSeatMap(eventId); // Denormalized view\n  await redis.setex(`seatmap:${eventId}`, 5, JSON.stringify(map));\n  return map;\n}',
     },
   ],
-  problems: [
-    { icon: '⚔️', title: 'Đặt trùng ghế (Double Booking)', desc: 'Xảy ra khi hàng trăm người dùng cùng bấm nút thanh toán một chiếc ghế trống tại cùng một mili giây, dẫn đến việc bán một ghế cho nhiều người.' },
-    { icon: '⏳', title: 'Khóa ảo giữ ghế (Seat Hoarding)', desc: 'Nhiều người dùng chọn ghế để giữ chỗ rồi bỏ đi không thanh toán. Ghế bị khóa ảo (lock holding) khiến khách hàng thực tế khác không mua được.' },
-    { icon: '🌪️', title: 'Quá tải đột biến (Flash Sale Traffic Spike)', desc: 'Khi liveshow của ca sĩ nổi tiếng mở bán, hàng triệu request đổ vào hệ thống trong 1 giây, gây sập server và đứt kết nối Database.' }
-  ],
   demos: [
     {
       id: 'seat-reservation',
