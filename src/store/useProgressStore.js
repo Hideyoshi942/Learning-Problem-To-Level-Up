@@ -33,16 +33,22 @@ const useProgressStore = create(
       },
 
       isDone(levelId, slug) {
-        return get().completed.has(`${levelId}:${slug}`)
+        const completed = get().completed
+        return completed instanceof Set && completed.has(`${levelId}:${slug}`)
       },
 
       countDoneInLevel(levelId) {
+        const completed = get().completed
+        if (!(completed instanceof Set)) return 0
         const prefix = `${levelId}:`
-        return [...get().completed].filter((k) => k.startsWith(prefix)).length
+        let count = 0
+        for (const key of completed) if (key.startsWith(prefix)) count++
+        return count
       },
 
       totalDone() {
-        return get().completed.size
+        const completed = get().completed
+        return completed instanceof Set ? completed.size : 0
       },
     }),
     {
