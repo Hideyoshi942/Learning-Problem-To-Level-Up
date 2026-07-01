@@ -265,4 +265,50 @@ demo();`,
     { type: 'info', icon: '🌐', title: 'Kubernetes làm sẵn cho bạn', body: 'Trong Kubernetes: CoreDNS làm DNS discovery, Service object làm load balancing, Readiness/Liveness probes làm health check tự động. Không cần Consul/Eureka nếu bạn đang dùng K8s.' },
     { type: 'tip', icon: '🔄', title: 'Client-side vs Server-side Discovery', body: 'Server-side: Load balancer query registry và route (đơn giản cho client). Client-side: Client query registry và chọn instance (linh hoạt hơn, Eureka model). K8s dùng server-side (Service/ClusterIP).' },
   ],
+  quiz: [
+    {
+      q: 'Service Registry đảm nhiệm vai trò gì trong hệ thống microservices?',
+      options: [
+        'Cân bằng tải trực tiếp giữa các database',
+        'Lưu danh sách services và addresses, services register khi startup và deregister khi shutdown',
+        'Mã hóa toàn bộ traffic giữa các services',
+        'Tập trung lưu trữ logs của toàn hệ thống',
+      ],
+      answer: 1,
+      explain: 'Service Registry là database lưu danh sách services và addresses (IP:port). Services register khi startup, deregister khi shutdown, còn clients query registry để tìm service cần gọi.',
+    },
+    {
+      q: 'Sự khác biệt giữa Liveness Probe và Readiness Probe là gì?',
+      options: [
+        'Liveness remove khỏi load balancer, Readiness thì restart service',
+        'Cả hai đều restart service khi kiểm tra thất bại',
+        'Liveness fail thì restart service, Readiness fail thì remove khỏi load balancer',
+        'Cả hai đều chỉ remove instance khỏi load balancer',
+      ],
+      answer: 2,
+      explain: 'Liveness Probe kiểm tra service còn sống không (fail thì restart). Readiness Probe kiểm tra service sẵn sàng nhận traffic không (fail thì remove khỏi load balancer).',
+    },
+    {
+      q: 'Netflix Eureka ưu tiên điều gì trong CAP theorem?',
+      options: [
+        'Availability hơn consistency (thiên về AP)',
+        'Consistency hơn availability (thiên về CP)',
+        'Chỉ quan tâm đến partition tolerance',
+        'Cân bằng cả ba thuộc tính như nhau',
+      ],
+      answer: 0,
+      explain: 'Eureka ưu tiên availability over consistency (AP trong CAP), và có Self-Preservation Mode để không evict services khi nghi ngờ network partition.',
+    },
+    {
+      q: 'Ưu điểm nổi bật của DNS-based Service Discovery là gì?',
+      options: [
+        'Đảm bảo strong consistency tuyệt đối giữa các node',
+        'Lưu trữ được toàn bộ lịch sử thay đổi của services',
+        'Bắt buộc phải dùng một client library chuyên dụng',
+        'Đơn giản nhất, không cần client library đặc biệt',
+      ],
+      answer: 3,
+      explain: 'DNS-based discovery resolve service name thành IP và load balance ở DNS level (nhiều A records). Ưu điểm là đơn giản nhất, không cần client library như Consul hay Eureka.',
+    },
+  ],
 }

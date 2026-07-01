@@ -162,5 +162,31 @@ setTimeout(() => {
     { type: 'success', icon: '🔄', title: 'Automated Failover đáng tin cậy', body: 'Sử dụng các công cụ trưởng thành như Patroni (PostgreSQL) hoặc Redis Sentinel để tự động phát hiện Master crash, bầu chọn leader mới và update IP nổi mà không cần can thiệp thủ công.' },
     { type: 'info', icon: '⏱️', title: 'Chấp nhận Eventual Consistency', body: 'Do độ trễ mạng và tải xử lý, replication lag luôn tồn tại. Hệ thống microservices cần chấp nhận sự nhất quán cuối cùng thay vì nhất quán tuyệt đối.' },
     { type: 'tip', icon: '💡', title: 'Sử dụng DB Proxy', body: 'Nên đặt các DB Proxy như ProxySQL hoặc PgBouncer ở trước cluster để ứng dụng không cần tự quản lý logic chia luồng đọc/ghi.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Trong mô hình Master-Replica, thành phần nào chịu trách nhiệm nhận tất cả các lệnh ghi (writes)?',
+      options: ['Replica gần nhất', 'Master', 'DB Proxy', 'Bất kỳ node nào rảnh rỗi'],
+      answer: 1,
+      explain: 'Master nhận tất cả writes, còn Replicas chỉ copy data từ Master và phục vụ reads. Vì vậy Master là single point of failure cho writes.',
+    },
+    {
+      q: 'Replication Lag mô tả điều gì?',
+      options: ['Độ trễ giữa lúc Master commit và lúc Replica apply thay đổi đó', 'Thời gian Master khởi động lại sau sự cố', 'Thời gian client kết nối tới database', 'Dung lượng tối đa của binary log'],
+      answer: 0,
+      explain: 'Replication Lag là độ trễ giữa lúc Master commit và Replica apply change đó, gây ra bởi network latency, large transactions hoặc replica đang bận CPU/IO.',
+    },
+    {
+      q: 'Khi user vừa ghi xong rồi đọc lại ngay, cách xử lý đúng để đảm bảo read-your-writes là gì?',
+      options: ['Đọc từ một Replica ngẫu nhiên để giảm tải', 'Xóa toàn bộ cache của hệ thống', 'Chuyển sang dùng database NoSQL', 'Đọc lại từ Master trong cùng session'],
+      answer: 3,
+      explain: 'Do Replica chưa kịp sync, đọc ngay sau khi write có thể không thấy dữ liệu mới. Fix phổ biến là route read đó về Master trong cùng session.',
+    },
+    {
+      q: 'Failover trong Master-Replica là gì?',
+      options: ['Quá trình sao lưu dữ liệu định kỳ ra ổ đĩa ngoài', 'Quá trình chia nhỏ bảng thành nhiều shard', 'Quá trình promote một Replica thành Master mới khi Master fail', 'Quá trình nén binary log để tiết kiệm dung lượng'],
+      answer: 2,
+      explain: 'Failover là quá trình promote Replica thành Master mới khi Master fail, có thể thực hiện thủ công hoặc tự động (Patroni, MHA, RDS Multi-AZ).',
+    },
+  ],
 }

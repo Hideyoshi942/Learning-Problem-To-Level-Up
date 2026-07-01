@@ -254,4 +254,101 @@ console.log('  Node:           Prisma query events');`,
     { type: 'success', icon: '✅', title: 'Fix N+1', body: 'JOIN (SQL), Eager Loading (JPA fetch join), DataLoader (GraphQL), select_related/prefetch_related (Django).' },
     { type: 'info', icon: '🔍', title: 'Phát hiện N+1', body: 'Đếm số query/request trong dev environment. Mọi số query thay đổi tuyến tính theo n rows đều là dấu hiệu N+1.' },
   ],
+  quiz: [
+    {
+      q: 'Vì sao load 100 posts kèm author lại sinh ra 101 queries trong pattern N+1?',
+      options: [
+        'Vì JOIN sinh ra quá nhiều duplicate rows',
+        'Vì database không có index trên bảng users',
+        'Vì 1 query lấy toàn bộ posts, cộng thêm N query lấy author cho từng post',
+        'Vì cursor pagination gọi lại query ở mỗi trang',
+      ],
+      answer: 2,
+      explain: 'N+1 gồm 1 query lấy danh sách posts, rồi lặp qua từng post và chạy thêm 1 query lấy author, thành N query nữa. Tổng cộng 1 + N = 101 query cho 100 posts.',
+    },
+    {
+      q: 'Cách fix N+1 đơn giản và hiệu quả nhất theo bài là gì?',
+      options: [
+        'Dùng SQL JOIN để gộp nhiều bảng vào một query duy nhất',
+        'Tăng threshold của query logger',
+        'Chuyển isolation level sang READ COMMITTED',
+        'Bỏ hoàn toàn ORM và viết raw SQL cho từng row',
+      ],
+      answer: 0,
+      explain: 'JOIN gộp posts và users vào một query duy nhất, để database optimizer chọn join algorithm tốt nhất. Đây là cách fix N+1 đơn giản và hiệu quả nhất.',
+    },
+    {
+      q: 'DataLoader giải quyết N+1 bằng cách nào?',
+      options: [
+        'Cache toàn bộ database vào memory',
+        'Gom (batch) các load riêng lẻ trong cùng một tick thành một request duy nhất',
+        'Tạo index trên mọi foreign key',
+        'Tách mỗi load thành một transaction riêng',
+      ],
+      answer: 1,
+      explain: 'DataLoader gom mọi lời gọi load trong cùng một tick lại, rồi gọi batch function một lần. Ví dụ 100 posts sinh 100 lời gọi load author nhưng được gom thành 1 query DB.',
+    },
+    {
+      q: 'Trong Django ORM, select_related() dùng cho loại quan hệ nào?',
+      options: [
+        'ManyToMany, join lại ở Python',
+        'Reverse ForeignKey với 2 queries riêng biệt',
+        'Chỉ dùng được cho raw SQL',
+        'ForeignKey và OneToOne, thực hiện SQL JOIN trong 1 query',
+      ],
+      answer: 3,
+      explain: 'select_related() thực hiện SQL JOIN để load ForeignKey và OneToOne trong 1 query. Còn prefetch_related() mới dùng cho ManyToMany và reverse ForeignKey với 2 query rồi join ở Python.',
+    },
+  ],
+  exercises: [
+    {
+      id: 'fix-n1-batch',
+      title: 'Gom N+1 query thành batch một lần',
+      task: 'Đoạn code đang dính lỗi N+1: sau khi lấy danh sách 6 post (1 query), nó lặp qua từng post và gọi query lấy author theo userId nên tổng cộng 7 query. Hãy gom lại: thu thập các userId duy nhất rồi query một lần bằng batch (WHERE id IN ...), giảm tổng số query xuống còn 2. Output kỳ vọng: So query = 2 (thay vì 7), So post = 6.',
+      buggyCode: `// BUG: N+1 - lap qua tung post roi query author theo tung userId
+var users = { 1: 'Alice', 2: 'Bob', 3: 'Charlie' };
+var posts = [
+  { id: 1, userId: 1 }, { id: 2, userId: 2 }, { id: 3, userId: 3 },
+  { id: 4, userId: 1 }, { id: 5, userId: 2 }, { id: 6, userId: 1 },
+];
+var queryCount = 0;
+function queryPosts() { queryCount++; return posts; }
+function queryUser(id) { queryCount++; return users[id]; }
+
+var list = queryPosts();                     // Query 1
+var result = list.map(function (p) {
+  return { id: p.id, author: queryUser(p.userId) };  // N query!
+});
+console.log('So post: ' + result.length);
+console.log('So query: ' + queryCount);`,
+      expectedOutput: 'So post: 6\nSo query: 2',
+      hint: 'Thu thập các userId duy nhất vào một mảng, gọi hàm query batch một lần để lấy tất cả author, rồi tra cứu từ map thay vì query bên trong vòng lặp.',
+      solution: `// FIX: batch loading - gom userId duy nhat, query 1 lan (WHERE id IN ...)
+var users = { 1: 'Alice', 2: 'Bob', 3: 'Charlie' };
+var posts = [
+  { id: 1, userId: 1 }, { id: 2, userId: 2 }, { id: 3, userId: 3 },
+  { id: 4, userId: 1 }, { id: 5, userId: 2 }, { id: 6, userId: 1 },
+];
+var queryCount = 0;
+function queryPosts() { queryCount++; return posts; }
+function queryUsersByIds(ids) {
+  queryCount++;                              // chi 1 query cho tat ca id
+  var map = {};
+  ids.forEach(function (id) { map[id] = users[id]; });
+  return map;
+}
+
+var list = queryPosts();                     // Query 1
+var ids = [];
+list.forEach(function (p) {
+  if (ids.indexOf(p.userId) === -1) ids.push(p.userId);
+});
+var userMap = queryUsersByIds(ids);          // Query 2 (batch)
+var result = list.map(function (p) {
+  return { id: p.id, author: userMap[p.userId] };
+});
+console.log('So post: ' + result.length);
+console.log('So query: ' + queryCount);`,
+    },
+  ],
 }

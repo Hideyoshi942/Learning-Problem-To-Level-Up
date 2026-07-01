@@ -223,4 +223,50 @@ demo();`,
     { type: 'info', icon: '🌊', title: 'Kafka vs RabbitMQ', body: 'Kafka: immutable log, replay được, high throughput, long retention. RabbitMQ: complex routing, acknowledgment, messages bị xóa sau khi consumed. Dùng Kafka khi cần replay history hoặc high-volume streaming.' },
     { type: 'tip', icon: '📋', title: 'Versioning Event Schema từ đầu', body: 'Luôn include schema_version trong event payload. Khi thay đổi schema, bump version và maintain backward compatibility. Consumer nên ignore unknown fields (tolerant reader pattern).' },
   ],
+  quiz: [
+    {
+      q: 'Điểm khác biệt cốt lõi giữa Event Streaming (Kafka) và message queue truyền thống là gì?',
+      options: [
+        'Kafka nhanh hơn nhưng không lưu events lâu dài',
+        'Trong Kafka events không bị xóa sau khi consumed và consumers có thể replay',
+        'Kafka chỉ cho phép một consumer duy nhất đọc log',
+        'Message queue truyền thống hỗ trợ replay history tốt hơn',
+      ],
+      answer: 1,
+      explain: 'Kafka lưu events như immutable ordered log, messages không bị xóa sau khi consumed nên consumers có thể replay từ bất kỳ offset nào, khác với message queue truyền thống.',
+    },
+    {
+      q: 'Vì sao in-process Event Bus (như EventEmitter) không phù hợp cho production microservices?',
+      options: [
+        'Vì nó xử lý quá chậm so với message broker',
+        'Vì nó không hỗ trợ mô hình pub/sub',
+        'Vì nó bắt buộc phải chạy chung với Kafka',
+        'Vì nó không đảm bảo delivery nếu process crash',
+      ],
+      answer: 3,
+      explain: 'In-process Event Bus không đảm bảo delivery nếu process crash, nên cho production microservices cần external message broker thực sự như Kafka hoặc RabbitMQ.',
+    },
+    {
+      q: 'Vì sao consumer cần được thiết kế idempotent?',
+      options: [
+        'Vì at-least-once delivery có thể gửi duplicate events nên xử lý nhiều lần vẫn phải cho kết quả đúng',
+        'Vì cần giúp consumer chạy nhanh hơn producer',
+        'Vì mỗi event luôn được gửi đúng chính xác một lần',
+        'Vì producer yêu cầu consumer phải xác nhận từng message',
+      ],
+      answer: 0,
+      explain: 'Với at-least-once delivery, consumer có thể nhận duplicate events, nên phải idempotent (ví dụ check event_id trước khi xử lý) để tránh side effects lặp lại.',
+    },
+    {
+      q: 'Thay đổi schema nào được coi là backward compatible?',
+      options: [
+        'Xóa một field bắt buộc khỏi payload',
+        'Đổi tên một field hiện có',
+        'Thêm một optional field mới mà consumer cũ có thể bỏ qua',
+        'Đổi kiểu dữ liệu của một field hiện có',
+      ],
+      answer: 2,
+      explain: 'Thêm optional field là backward compatible vì consumer cũ ignore field lạ. Xóa hoặc rename field là incompatible và cần version mới.',
+    },
+  ],
 }

@@ -153,5 +153,31 @@ console.log('✅ Hiệu năng cache được duy trì ổn định!');`
     { type: 'success', icon: '👑', title: 'Sự lựa chọn của các Big Tech', body: 'Cassandra, DynamoDB, Memcached Client, và các CDN lớn đều sử dụng Consistent Hashing làm xương sống để quản lý lưu trữ phân tán.' },
     { type: 'info', icon: '👥', title: 'Vai trò cốt lõi của Virtual Nodes', body: 'Virtual Nodes (vNodes) giúp chia nhỏ lát cắt trên vòng tròn Hash. Số lượng vNode càng nhiều thì phân phối dữ liệu giữa các server vật lý càng cân bằng.' },
     { type: 'tip', icon: '⚡', title: 'Tối ưu hóa Stateless Load Balancing', body: 'Sử dụng Consistent Hashing ở tầng Proxy (Nginx, Envoy) giúp định tuyến client IP cố định đến cùng một API server, giữ ấm local session cache hiệu quả.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'So với simple modulo hash, Consistent Hashing có lợi thế gì khi thêm hoặc xóa một node?',
+      options: ['Toàn bộ keys đều phải remapped lại', 'Không cần dùng hàm hash nào cả', 'Chỉ một phần nhỏ keys cần được remapped', 'Bắt buộc phải tăng gấp đôi số node'],
+      answer: 2,
+      explain: 'Modulo hash làm gần như 100% keys phải rehash khi đổi số node, còn Consistent Hashing chỉ khiến khoảng K/N keys cần remapped.',
+    },
+    {
+      q: 'Virtual Node (vNode) chủ yếu giải quyết vấn đề gì trong Consistent Hashing?',
+      options: ['Phân phối không đều (non-uniform distribution) giữa các node', 'Độ trễ mạng cao giữa các datacenter', 'Mã hóa dữ liệu trên đường truyền', 'Nén dữ liệu để tiết kiệm dung lượng'],
+      answer: 0,
+      explain: 'Mỗi physical node được map thành nhiều vNode trên ring nên distribution đều hơn, đồng thời cho phép node mạnh nhận nhiều vNode hơn.',
+    },
+    {
+      q: 'Với RF=3, công thức quorum nào đảm bảo strong consistency?',
+      options: ['W + R < RF', 'W + R > RF', 'W = 1 và R = 1', 'RF luôn phải bằng 1'],
+      answer: 1,
+      explain: 'Điều kiện W + R > RF đảm bảo tập read và tập write luôn giao nhau; ví dụ RF=3 với W=2, R=2 thì 2 + 2 > 3.',
+    },
+    {
+      q: 'Hinted Handoff xử lý tình huống nào khi một node fail?',
+      options: ['Khi cần thêm một vNode mới vào ring', 'Khi phải rehash lại toàn bộ ring', 'Khi client đổi địa chỉ IP', 'Node khác tạm thời lưu data thay cho node đang fail rồi forward khi node recover'],
+      answer: 3,
+      explain: 'Hinted Handoff cho phép các node khác tạm giữ dữ liệu thay cho node đang down, sau đó forward lại khi node recover, kết hợp anti-entropy để sync sau này.',
+    },
+  ],
 }

@@ -37,6 +37,16 @@ import searchEngine    from './level5/search-engine.js'
 import distributedFS   from './level5/distributed-fs.js'
 import recommendation  from './level5/recommendation.js'
 
+import apiDesign         from './level6/api-design.js'
+import security          from './level6/security.js'
+import observability     from './level6/observability.js'
+import testing           from './level6/testing.js'
+import cicdDeploy        from './level6/cicd-deploy.js'
+
+import resilience        from './level7/resilience.js'
+import consensus         from './level7/consensus.js'
+import consistencyModels from './level7/consistency-models.js'
+
 export const LEVELS = [
   {
     id: 1,
@@ -77,6 +87,22 @@ export const LEVELS = [
     color: 'var(--level5-color)',
     description: 'Design các hệ thống thực tế: URL Shortener, Chat, News Feed, Video Streaming, Ride Hailing...',
     topics: [urlShortener, chatSystem, newsFeed, videoStreaming, rideHailing, paymentGateway, ticketBooking, searchEngine, distributedFS, recommendation],
+  },
+  {
+    id: 6,
+    title: 'Production Readiness',
+    emoji: '🛠️',
+    color: 'var(--level6-color)',
+    description: 'Sẵn sàng vận hành production: API Design, Security & Auth, Observability, Testing, CI/CD & Deployment.',
+    topics: [apiDesign, security, observability, testing, cicdDeploy],
+  },
+  {
+    id: 7,
+    title: 'Reliability & Consensus',
+    emoji: '🎯',
+    color: 'var(--level7-color)',
+    description: 'Độ tin cậy & đồng thuận (senior): Resilience Patterns, Consensus (Raft/Paxos), Consistency Models.',
+    topics: [resilience, consensus, consistencyModels],
   },
 ]
 

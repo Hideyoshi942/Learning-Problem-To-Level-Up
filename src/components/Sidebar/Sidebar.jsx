@@ -16,7 +16,7 @@ export default function Sidebar({ isOpen }) {
           <span className={styles.logoIcon}>⚡</span>
           <span className={styles.logoText}>Backend Hub</span>
         </button>
-        <span className={styles.badge}>30 Topics</span>
+        <span className={styles.badge}>{TOTAL_TOPICS} Topics</span>
       </div>
 
       {/* Nav */}

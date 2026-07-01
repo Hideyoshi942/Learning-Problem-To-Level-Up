@@ -200,5 +200,55 @@ console.log('Danh sách Video Segments cần tải:', segments);`
     { type: 'success', icon: '🌐', title: 'CDN Edge Caching tiết kiệm 90% chi phí', body: 'Video là dữ liệu tĩnh. Bằng cách chia nhỏ video thành các phân đoạn (segments) và lưu trữ chúng trên CDN Edge Server, bạn có thể phục vụ hàng triệu người dùng toàn cầu với chi phí hạ tầng Origin Server tối thiểu.' },
     { type: 'info', icon: '📺', title: 'So sánh HLS vs DASH', body: 'HLS (.m3u8) được Apple bảo trợ, tương thích 100% với các thiết bị iOS/macOS. DASH (.mpd) là tiêu chuẩn ISO mở, thân thiện hơn với các hệ điều hành Android, Smart TV và hỗ trợ các công nghệ bảo vệ bản quyền DRM phong phú hơn.' },
     { type: 'tip', icon: '⚡', title: 'Transcoding song song bằng cách chia nhỏ video', body: 'Để giảm thời gian Transcoding cho các video dài (2-3 tiếng), hãy cắt video gốc thành các đoạn nhỏ 5-10 phút, phân phối cho các máy ảo transcode song song, rồi gộp các segment kết quả lại.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Vai trò chính của CDN trong hệ thống video streaming là gì?',
+      options: ['Chuyển đổi định dạng video sang nhiều độ phân giải khác nhau', 'Cache và phục vụ các segment video từ edge server gần user nhất để giảm latency', 'Chia file lớn thành nhiều chunk để upload', 'Chọn chất lượng video phù hợp với băng thông của user'],
+      answer: 1,
+      explain: 'CDN cache content tại edge server gần user, thay vì stream từ origin server xa hàng nghìn km, giúp giảm latency đáng kể.',
+    },
+    {
+      q: 'Khi buffer của player quá thấp (dưới 5s), thuật toán ABR nên làm gì?',
+      options: ['Tăng chất lượng lên cao nhất để tận dụng băng thông', 'Dừng phát video hoàn toàn cho tới khi mạng ổn định', 'Chuyển sang giao thức DASH', 'Hạ nhanh xuống chất lượng thấp nhất (360p) để tránh buffering'],
+      answer: 3,
+      explain: 'Buffer thấp là dấu hiệu nguy cơ giật lag, ABR sẽ hạ cấp nhanh về chất lượng thấp để nạp kịp và tránh buffering.',
+    },
+    {
+      q: 'Điểm khác biệt cơ bản giữa HLS và DASH là gì?',
+      options: ['HLS do Apple bảo trợ dùng m3u8, DASH là chuẩn ISO mở dùng file mpd', 'HLS dùng file XML, còn DASH dùng m3u8', 'HLS không hỗ trợ adaptive streaming, chỉ DASH mới có', 'HLS chỉ chạy trên Android, còn DASH chỉ chạy trên iOS'],
+      answer: 0,
+      explain: 'HLS là protocol của Apple dùng playlist m3u8 (tốt cho iOS/macOS); DASH là chuẩn ISO mở dùng MPD (XML), linh hoạt hơn cho DRM và nhiều nền tảng.',
+    },
+    {
+      q: 'Lợi ích chính của Chunk Upload (Multipart Upload) là gì?',
+      options: ['Giảm chi phí băng thông của CDN', 'Tự động chọn độ phân giải video phù hợp', 'Khi kết nối bị đứt, chỉ cần resume từ chunk chưa upload thay vì làm lại từ đầu', 'Nén video để giảm dung lượng lưu trữ'],
+      answer: 2,
+      explain: 'Chia file thành nhiều chunk giúp upload lại chỉ phần bị lỗi khi mất kết nối, thay vì phải upload lại toàn bộ file lớn.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế nền tảng video streaming như YouTube hoặc Netflix: upload, xử lý và phát video mượt cho hàng triệu người xem.',
+    scale: ['500 triệu DAU, 1 tỷ giờ xem/ngày', '500 giờ video upload mỗi phút', 'Lưu trữ hàng trăm PB, nhiều quality variant mỗi video', 'p99 thời gian bắt đầu phát (startup) < 2s'],
+    requirements: [
+      'Upload video lớn ổn định kể cả khi mạng chập chờn',
+      'Chuyển đổi video sang nhiều độ phân giải (360p → 4K)',
+      'Phát video thích ứng băng thông (adaptive bitrate), ít buffering',
+      'Phục vụ nội dung toàn cầu với độ trễ thấp',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng dung lượng lưu trữ, băng thông serve và tải transcoding.', hint: '500 giờ/phút upload; mỗi giờ video ~1GB, tạo ~5 quality variant → dung lượng gốc cộng biến thể tăng nhanh, hàng trăm PB/năm. Băng thông đọc gấp nhiều lần ghi → CDN gánh hơn 90%. Transcoding: 1s video tốn 10-30s xử lý.' },
+      { title: 'API Design', prompt: 'Định nghĩa endpoint upload và endpoint lấy luồng phát.', hint: 'POST /upload dạng resumable/chunk (trả upload_id, part URL). GET /videos/{id}/manifest trả master.m3u8 hoặc .mpd; các segment URL trỏ về CDN. GET /videos/{id} trả metadata.' },
+      { title: 'Data Model', prompt: 'Thiết kế nơi lưu metadata và nơi lưu video segment.', hint: 'videos(video_id, title, uploader_id, status, duration); video_variants(video_id, resolution, codec, segment_path). Metadata để SQL; raw và segment (2-10s) để object storage (S3) rồi phân phối qua CDN.' },
+      { title: 'Upload → Transcode → Deliver Pipeline', prompt: 'Mô tả pipeline từ lúc upload tới khi phát được mượt.', hint: 'Chunk/multipart upload (TUS, tối thiểu 5MB/part) → lưu raw lên S3 → đẩy job vào queue (SQS/Kafka) → transcoding worker (FFmpeg, cắt video dài thành đoạn 5-10 phút để transcode song song) tạo HLS/DASH segment → đẩy lên CDN và invalidate cache.' },
+      { title: 'Scale & Trade-offs', prompt: 'Bàn về CDN caching, ABR, HLS vs DASH và chi phí transcoding.', hint: 'CDN chỉ cache segment nhỏ (không cache nguyên file), pre-warm nội dung hot lên edge. ABR chọn quality theo bandwidth và buffer (dùng 80% băng thông làm biên an toàn). HLS (m3u8, tốt cho iOS) vs DASH (mpd, mở, DRM phong phú). Transcoding tốn CPU/GPU → hardware accel (NVENC) và scale worker theo độ dài queue.' },
+    ],
+    rubric: [
+      'Có ước lượng dung lượng lưu trữ, băng thông và tải transcoding',
+      'API hỗ trợ resumable/chunk upload và trả manifest trỏ segment về CDN',
+      'Data model tách metadata (SQL) và video segment (object storage/CDN)',
+      'Mô tả được pipeline upload → transcode → deliver rõ ràng',
+      'Nêu được ít nhất 2 trade-offs (HLS vs DASH, CDN caching, ABR, hardware transcoding)',
+    ],
+  },
 }

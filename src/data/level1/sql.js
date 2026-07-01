@@ -250,4 +250,95 @@ Output (GOOD):
     { type: 'warning', icon: '⚠️', title: 'Index cũng có hại!', body: 'INSERT/UPDATE/DELETE chậm hơn vì phải cập nhật index. Tốn storage. Đừng index mọi cột.' },
     { type: 'info', icon: '💡', title: 'Workflow chuẩn', body: '1) EXPLAIN ANALYZE → 2) Tìm Seq Scan → 3) Thêm index → 4) EXPLAIN ANALYZE lại để xác nhận.' },
   ],
+  quiz: [
+    {
+      q: 'Với index B-Tree trên cột email, truy vấn nào KHÔNG tận dụng được index?',
+      options: [
+        'WHERE email = a@b.com',
+        'WHERE email LIKE admin%',
+        'WHERE email BETWEEN hai giá trị',
+        'WHERE email LIKE %@gmail',
+      ],
+      answer: 3,
+      explain: 'B-Tree chỉ hỗ trợ =, range và prefix (LIKE admin%). LIKE bắt đầu bằng ký tự wildcard như %@gmail buộc database phải full scan.',
+    },
+    {
+      q: 'Có composite index (status, created_at). Theo Left-prefix rule, truy vấn nào KHÔNG dùng được index này?',
+      options: [
+        'WHERE created_at > một ngày (chỉ lọc theo cột đứng sau)',
+        'WHERE status = pending',
+        'WHERE status = pending AND created_at > một ngày',
+        'WHERE status = shipped',
+      ],
+      answer: 0,
+      explain: 'Composite index (A, B) chỉ hỗ trợ query bắt đầu bằng cột leading A. Query chỉ lọc theo B (created_at) mà bỏ qua status nên không dùng được index.',
+    },
+    {
+      q: 'Cột nào có selectivity cao nhất, khiến index hiệu quả nhất?',
+      options: [
+        'Cột gender chỉ có nam hoặc nữ',
+        'Cột status chỉ có 4 giá trị',
+        'Cột email gần như unique cho mỗi user',
+        'Cột boolean is_active',
+      ],
+      answer: 2,
+      explain: 'Selectivity = số giá trị unique / tổng rows. Email gần như unique nên selectivity gần 1.0, index rất hiệu quả. Các cột ít giá trị (gender, status, boolean) có selectivity thấp.',
+    },
+    {
+      q: 'Kỹ thuật nào giúp database không cần quay lại đọc table gốc, tạo ra Index Only Scan?',
+      options: [
+        'Query Planner',
+        'Covering Index',
+        'Execution Plan',
+        'EXPLAIN ANALYZE',
+      ],
+      answer: 1,
+      explain: 'Covering Index chứa đủ mọi cột mà query cần (cả WHERE lẫn SELECT), nên database đọc thẳng từ index mà không cần truy cập table gốc, tạo ra Index Only Scan.',
+    },
+  ],
+  exercises: [
+    {
+      id: 'index-map-lookup',
+      title: 'Sửa tra cứu O(n) thành index-map O(1)',
+      task: 'Hàm findById đang full scan toàn bộ mảng (O(n)) để tìm bản ghi theo id, nên biến đếm số dòng phải quét lên rất cao. Hãy dùng Map index đã build sẵn để tra cứu O(1). Output kỳ vọng: Rows checked = 1.',
+      buggyCode: `// BUG: đã có index Map nhưng findById vẫn full scan O(n)
+var users = [];
+for (var i = 1; i <= 1000; i++) users.push({ id: i, email: 'user' + i + '@ex.com' });
+
+// index: id -> user (đã build sẵn, tra cứu O(1))
+var index = new Map();
+for (var i = 0; i < users.length; i++) index.set(users[i].id, users[i]);
+
+var checked = 0;
+function findById(id) {
+  // BUG: quét tuyến tính thay vì dùng index.get(id)
+  for (var i = 0; i < users.length; i++) {
+    checked++;
+    if (users[i].id === id) return users[i];
+  }
+  return null;
+}
+
+var u = findById(1000);
+console.log('Found: ' + u.email);
+console.log('Rows checked: ' + checked);`,
+      expectedOutput: 'Found: user1000@ex.com\nRows checked: 1',
+      hint: 'Đã có sẵn Map index. Thay vòng for tuyến tính bằng một lần index.get(id); biến checked chỉ tăng 1 lần.',
+      solution: `var users = [];
+for (var i = 1; i <= 1000; i++) users.push({ id: i, email: 'user' + i + '@ex.com' });
+
+var index = new Map();
+for (var i = 0; i < users.length; i++) index.set(users[i].id, users[i]);
+
+var checked = 0;
+function findById(id) {
+  checked++;                 // O(1): chỉ 1 lần tra cứu
+  return index.get(id) || null;
+}
+
+var u = findById(1000);
+console.log('Found: ' + u.email);
+console.log('Rows checked: ' + checked);`,
+    },
+  ],
 }

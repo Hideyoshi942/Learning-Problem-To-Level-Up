@@ -59,6 +59,21 @@
   letter-spacing: 0.5px;
 }
 
+.actions { display: flex; align-items: center; gap: 8px; }
+.editBtn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.editBtn:hover { color: var(--text-primary); border-color: var(--accent); }
+
 .runBtn {
   background: linear-gradient(135deg, var(--success), #059669);
   border: none;
@@ -91,6 +106,26 @@
   max-height: 480px;
   overflow-y: auto;
 }
+
+/* Editable code editor */
+.editor {
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-code);
+  background: #080a14;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 20px;
+  resize: vertical;
+  min-height: 260px;
+  max-height: 520px;
+  outline: none;
+  display: block;
+  tab-size: 2;
+}
+.editor:focus { background: #06080f; }
 
 /* Output */
 .output {

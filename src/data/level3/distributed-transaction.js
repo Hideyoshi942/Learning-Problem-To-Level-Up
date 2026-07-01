@@ -221,4 +221,50 @@ orderService.createOrder({ userId: 'U1', amount: 299000, items: ['ProductA'] })
     { type: 'info', icon: '↩️', title: 'Compensating transaction phải idempotent', body: 'Saga compensate có thể chạy nhiều lần (do retry). Mỗi step cần xử lý trường hợp "đã compensate rồi" mà không bị lỗi.' },
     { type: 'tip', icon: '🔭', title: 'Orchestration vs Choreography', body: 'Orchestration (central coordinator) dễ debug, dễ monitor flow. Choreography (event-driven) ít coupling hơn nhưng khó trace. Bắt đầu với Orchestration cho đến khi team quen với distributed systems.' },
   ],
+  quiz: [
+    {
+      q: 'Vấn đề lớn nhất của Two Phase Commit trong microservices là gì?',
+      options: [
+        'Không đảm bảo được atomicity giữa các services',
+        'Không thể phát events lên message queue',
+        'Blocking: nếu Coordinator crash sau Phase 1, participants bị lock mãi',
+        'Không hỗ trợ nhiều database khác nhau',
+      ],
+      answer: 2,
+      explain: '2PC bị blocking vì khi Coordinator crash sau Phase 1, các participants đã prepare sẽ bị lock resources mãi, cộng thêm không scale tốt và tăng latency.',
+    },
+    {
+      q: 'Trong Saga Pattern, khi một step thất bại thì hệ thống rollback bằng cách nào?',
+      options: [
+        'Chạy các compensating transactions ngược lại để undo các step đã thành công',
+        'Gọi lệnh ROLLBACK của database trên tất cả services',
+        'Chờ Coordinator gửi lệnh abort tới mọi participant',
+        'Xóa toàn bộ dữ liệu rồi bắt đầu lại từ đầu',
+      ],
+      answer: 0,
+      explain: 'Saga là chuỗi local transactions, mỗi step có một compensating transaction. Khi một step fail, chạy các compensating transactions ngược lại thay vì rollback kiểu database.',
+    },
+    {
+      q: 'Outbox Pattern được sinh ra để giải quyết bài toán nào?',
+      options: [
+        'Giảm latency khi phải gọi nhiều services đồng bộ',
+        'Cân bằng tải giữa nhiều consumers',
+        'Tự động rollback transaction span nhiều services',
+        'Update DB và publish event một cách atomic trong cùng một transaction',
+      ],
+      answer: 3,
+      explain: 'Outbox ghi event vào bảng outbox trong CÙNG DB transaction với việc update domain, sau đó background job đọc outbox và publish, đảm bảo update DB và publish event là atomic.',
+    },
+    {
+      q: 'Vì sao compensating transaction cần phải idempotent?',
+      options: [
+        'Để giảm dung lượng lưu trữ trong event store',
+        'Vì nó có thể bị chạy nhiều lần do retry nhưng vẫn phải an toàn',
+        'Vì database bắt buộc mọi transaction phải idempotent',
+        'Để tăng tốc độ xử lý của Saga Orchestrator',
+      ],
+      answer: 1,
+      explain: 'Saga compensate có thể chạy nhiều lần do retry, nên mỗi step phải xử lý được trường hợp đã compensate rồi mà không bị lỗi, tức là phải idempotent.',
+    },
+  ],
 }

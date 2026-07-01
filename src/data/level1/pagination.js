@@ -215,4 +215,95 @@ for (let page = 1; page <= 4; page++) {
     { type: 'success', icon: '🚀', title: 'Keyset Pagination', body: 'O(log n) với index. Phù hợp API REST pagination. Nhược điểm: không nhảy đến page tuỳ ý.' },
     { type: 'info', icon: '📱', title: 'Cursor Pagination', body: 'Best practice cho Infinite Scroll, Social Feed. Dùng khi data thay đổi liên tục (insert/delete).' },
   ],
+  quiz: [
+    {
+      q: 'Vì sao OFFSET pagination càng về trang sau càng chậm?',
+      options: [
+        'Vì mỗi trang phải mã hóa cursor phức tạp hơn',
+        'Vì DB phải scan và bỏ qua m rows đầu tiên rồi mới lấy kết quả',
+        'Vì index B-Tree bị vô hiệu hóa hoàn toàn khi có ORDER BY',
+        'Vì kết quả phải sort lại từ đầu ở mỗi trang',
+      ],
+      answer: 1,
+      explain: 'LIMIT n OFFSET m buộc DB scan qua m rows đầu rồi bỏ đi, chỉ giữ n rows. Trang càng lớn thì m càng lớn nên số rows phải scan tăng tuyến tính.',
+    },
+    {
+      q: 'Keyset Pagination scan bao nhiêu rows cho mỗi trang, bất kể đang ở trang thứ mấy?',
+      options: [
+        'Toàn bộ bảng',
+        'Số rows bằng offset của trang',
+        'Một nửa bảng',
+        'Đúng bằng pageSize rows',
+      ],
+      answer: 3,
+      explain: 'Keyset dùng WHERE id > last_seen_id để bắt đầu từ điểm đã biết, nên luôn chỉ scan đúng pageSize rows, đạt O(log n) khi có index.',
+    },
+    {
+      q: 'Cursor Pagination khác Keyset Pagination ở điểm nào?',
+      options: [
+        'Cursor encode thông tin keyset thành opaque token (thường Base64 JSON) để che giấu implementation',
+        'Cursor cho phép nhảy đến bất kỳ trang nào tùy ý',
+        'Cursor không cần index trên cột sắp xếp',
+        'Cursor luôn dùng OFFSET bên dưới',
+      ],
+      answer: 0,
+      explain: 'Cursor Pagination về bản chất là Keyset nhưng đóng gói cursor thành opaque token (Base64 JSON). Client không biết bên trong chứa gì, chỉ gửi lại cho request kế tiếp.',
+    },
+    {
+      q: 'Vì sao khi phân trang cần thêm cột id vào ORDER BY, ví dụ ORDER BY score DESC, id DESC?',
+      options: [
+        'Để giảm số rows phải scan',
+        'Để mã hóa cursor ngắn hơn',
+        'Để đảm bảo thứ tự ổn định, tránh trùng lặp hoặc bỏ sót các row cùng score',
+        'Để index chỉ cần dùng một cột',
+      ],
+      answer: 2,
+      explain: 'Nếu chỉ sort theo cột không unique (score), các row cùng score có thể bị xáo trộn giữa các trang gây lặp hoặc bỏ sót. Thêm id làm tiebreaker giúp thứ tự stable và unique.',
+    },
+  ],
+  exercises: [
+    {
+      id: 'offset-off-by-one',
+      title: 'Sửa công thức OFFSET bị lệch làm sót bản ghi',
+      task: 'Hàm phân trang tính offset sai (page nhân size thay vì (page - 1) nhân size) nên trang đầu bị bỏ qua, khi duyệt hết các trang sẽ SÓT bản ghi. Hãy sửa công thức offset để lấy đủ toàn bộ bản ghi, không lặp không sót. Output kỳ vọng: đủ 9 id từ 1 đến 9.',
+      buggyCode: `// Duyệt qua từng trang và gom tất cả id lại
+var data = [];
+for (var i = 1; i <= 9; i++) data.push({ id: i });
+
+var size = 3;
+function page(data, p, size) {
+  // BUG: offset sai -> bỏ qua trang đầu
+  var offset = p * size;
+  return data.slice(offset, offset + size);
+}
+
+var all = [];
+for (var p = 1; p <= 3; p++) {
+  var items = page(data, p, size);
+  for (var i = 0; i < items.length; i++) all.push(items[i].id);
+}
+
+console.log('All ids: ' + all.join(','));
+console.log('Count: ' + all.length);`,
+      expectedOutput: 'All ids: 1,2,3,4,5,6,7,8,9\nCount: 9',
+      hint: 'Với page bắt đầu từ 1, offset đúng là (p - 1) * size, không phải p * size.',
+      solution: `var data = [];
+for (var i = 1; i <= 9; i++) data.push({ id: i });
+
+var size = 3;
+function page(data, p, size) {
+  var offset = (p - 1) * size;   // FIX: offset đúng
+  return data.slice(offset, offset + size);
+}
+
+var all = [];
+for (var p = 1; p <= 3; p++) {
+  var items = page(data, p, size);
+  for (var i = 0; i < items.length; i++) all.push(items[i].id);
+}
+
+console.log('All ids: ' + all.join(','));
+console.log('Count: ' + all.length);`,
+    },
+  ],
 }

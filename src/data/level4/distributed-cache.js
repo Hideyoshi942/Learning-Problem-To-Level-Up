@@ -174,5 +174,31 @@ class DatabaseAndCache {
     { type: 'success', icon: '⚡', title: 'Multi-key với Hash Tags', body: 'Hãy tận dụng Hash Tags dạng {key_chinh}:sub_key trong Redis Cluster để gom các dữ liệu liên quan về cùng một shard, cho phép sử dụng các giao dịch MULTI/EXEC hiệu quả.' },
     { type: 'info', icon: '⏱️', title: 'Cache Aside là Eventual Consistency', body: 'Với Cache Aside, bạn chấp nhận việc dữ liệu có thể không đồng bộ tuyệt đối trong tích tắc. Đây là sự đánh đổi (Trade-off) để đạt hiệu năng chịu tải tối đa.' },
     { type: 'tip', icon: '🛡️', title: 'Sử dụng Bloom Filter giải quyết thủng cache', body: 'Để chống lại các đợt tấn công Cache Penetration, hãy đặt một Bloom Filter trước cache để lọc nhanh và từ chối các key chắc chắn không tồn tại.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Redis Cluster chia dữ liệu thành bao nhiêu hash slots?',
+      options: ['1024 slots', '16384 slots', '65536 slots', '256 slots'],
+      answer: 1,
+      explain: 'Redis Cluster tự động chia data thành 16384 hash slots; slot của một key được tính bằng CRC16(key) % 16384.',
+    },
+    {
+      q: 'Hash tag (dạng {user:123}) trong Redis Cluster dùng để làm gì?',
+      options: ['Mã hóa nội dung của key', 'Nén giá trị lưu trong cache', 'Tự động kéo dài TTL của key', 'Ép các key liên quan vào cùng một slot để multi-key operations hoạt động'],
+      answer: 3,
+      explain: 'Khi có hash tag, chỉ phần trong ngoặc được hash nên các key liên quan rơi vào cùng slot và cùng node, cho phép multi-key operations như MGET hoạt động.',
+    },
+    {
+      q: 'Vì sao một Hot Key có thể làm nghẽn một node Redis?',
+      options: ['Vì Redis single-threaded nên toàn bộ traffic của hot key dồn vào một node gây bottleneck CPU', 'Vì Redis tự động xóa hot key khỏi bộ nhớ', 'Vì hot key làm hỏng dữ liệu của các key khác', 'Vì hot key chiếm hết toàn bộ dung lượng đĩa'],
+      answer: 0,
+      explain: 'Một hot key luôn nằm trên một node, mà Redis xử lý đơn luồng nên toàn bộ traffic dồn vào node đó có thể gây bottleneck CPU và block node.',
+    },
+    {
+      q: 'Gossip Protocol trong Redis Cluster được dùng để làm gì?',
+      options: ['Mã hóa dữ liệu truyền giữa các node', 'Tăng tốc độ ghi trực tiếp xuống database', 'Cho các node trao đổi thông tin về cluster state (node nào còn sống, node nào phụ trách slot nào)', 'Tự động xóa các key đã hết hạn TTL'],
+      answer: 2,
+      explain: 'Gossip Protocol để các node định kỳ ping nhau và lan truyền cluster state (liveness, ai phụ trách slot nào) một cách decentralized và fault-tolerant.',
+    },
+  ],
 }

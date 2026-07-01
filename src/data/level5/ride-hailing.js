@@ -160,5 +160,55 @@ console.log(\`💰 Hệ số nhân: \${surge2}x -> Giá chuyến đi: \${basePri
     { type: 'success', icon: '📍', title: 'Redis GEO là giải pháp tối ưu cho real-time', body: 'Cấu trúc dữ liệu Redis GEO cho phép lưu và tính khoảng cách địa lý cực kỳ nhanh ngay trên bộ nhớ RAM, giúp định vị tài xế lân cận trong thời gian thực chỉ mất vài mili giây.' },
     { type: 'info', icon: '🔷', title: 'Ưu điểm cấu trúc tổ chức không gian H3 (Hexagon)', body: 'Uber phát minh ra H3 sử dụng lưới lục giác để chia bản đồ. So với lưới ô vuông của Geohash, lưới lục giác có khoảng cách từ tâm cell tới tất cả các cell lân cận là hoàn toàn bằng nhau, giúp tính toán bán kính tìm kiếm chính xác hơn.' },
     { type: 'tip', icon: '🔋', title: 'Tiết kiệm pin cho điện thoại tài xế', body: 'Đừng bắt GPS cập nhật mỗi giây khi xe đang đỗ hoặc kẹt xe. Hãy dùng gia tốc kế của điện thoại để tự động giảm tần suất quét GPS xuống 10-15s khi dừng đỗ để tiết kiệm pin.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Geohash hoạt động theo nguyên lý nào?',
+      options: ['Encode tọa độ (lat, lng) thành string ngắn, các vùng gần nhau có prefix giống nhau', 'Chia bản đồ thành lưới lục giác đều đặn', 'Tính toán đường đi tối ưu giữa hai điểm', 'Lưu tọa độ GPS vào SQL với index B-tree'],
+      answer: 0,
+      explain: 'Geohash mã hóa tọa độ thành chuỗi, độ dài chuỗi tỉ lệ với độ chính xác, và các cell gần nhau chia sẻ prefix nên dễ query neighbors.',
+    },
+    {
+      q: 'Vì sao QuadTree tốt hơn Geohash ở những khu vực có mật độ tài xế không đều?',
+      options: ['Vì QuadTree luôn dùng ít bộ nhớ hơn Geohash', 'Vì QuadTree không cần tính khoảng cách', 'Vì QuadTree chia nhỏ ô đệ quy khi một cell có quá nhiều object', 'Vì QuadTree mã hóa tọa độ thành string ngắn hơn'],
+      answer: 2,
+      explain: 'QuadTree chia không gian thành 4 ô và tiếp tục chia nhỏ khi cell quá đông, nên thích ứng tốt với mật độ không đều (trung tâm dày, ngoại ô thưa).',
+    },
+    {
+      q: 'Để tránh gán cùng một tài xế cho hai khách (double-assign), Matching Engine cần gì?',
+      options: ['Tăng bán kính tìm kiếm lên 10km', 'Dùng công thức Haversine chính xác hơn', 'Cache danh sách tài xế trong CDN', 'Dùng distributed lock để tránh race condition khi assign'],
+      answer: 3,
+      explain: 'Nhiều request đồng thời có thể chọn cùng một tài xế; distributed lock (ví dụ Redis SET NX) đảm bảo chỉ một request giữ được tài xế.',
+    },
+    {
+      q: 'Vì sao không nên ghi tọa độ GPS của tài xế trực tiếp vào SQL Database?',
+      options: ['Vì SQL không lưu được số thực', 'Vì cập nhật GPS liên tục sẽ phá hủy hiệu năng ghi, nên dùng Redis GEO tạm thời', 'Vì SQL không thể tính được khoảng cách địa lý', 'Vì tọa độ GPS luôn bị sai lệch nên không đáng lưu'],
+      answer: 1,
+      explain: 'Hàng trăm ngàn tài xế cập nhật mỗi vài giây sẽ làm nghẽn ghi SQL; nên lưu tạm trên Redis GEO và chỉ ghi lịch sử chuyến đi vào SQL khi kết thúc.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế backend cho ứng dụng gọi xe kiểu Grab/Uber: ghép khách với tài xế gần nhất trong thời gian thực.',
+    scale: ['10 triệu chuyến/ngày', '500 nghìn tài xế online đồng thời', 'Tài xế gửi GPS mỗi 4 giây', 'p99 tìm tài xế < 2 giây'],
+    requirements: [
+      'Nhận và lưu vị trí tài xế real-time',
+      'Tìm N tài xế gần nhất quanh điểm đón',
+      'Ghép khách với tài xế tốt nhất, tránh gán trùng',
+      'Cập nhật vị trí tài xế cho khách trong lúc di chuyển',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng QPS của location update và QPS tìm kiếm, cùng băng thông cần thiết.', hint: '500 nghìn tài xế / 4 giây ≈ 125 nghìn update/s. Mỗi update ~100B → ~12.5MB/s. Đây là write-heavy nên không ghi thẳng vào SQL.' },
+      { title: 'API Design', prompt: 'Định nghĩa API cập nhật vị trí, tìm xe và đặt xe. Chọn kênh truyền cho real-time.', hint: 'WebSocket cho location_update (2 chiều, tần suất cao) thay vì HTTP polling. POST /api/rides để đặt. GET /api/drivers/nearby?lat&lng&radius để tìm.' },
+      { title: 'Data Model', prompt: 'Thiết kế nơi lưu vị trí nóng và nơi lưu lịch sử chuyến. Chọn kho dữ liệu phù hợp.', hint: 'Vị trí hiện tại → Redis GEO (RAM, tính khoảng cách vài ms). Lịch sử chuyến → SQL ghi khi kết thúc. Tách hot data khỏi cold data.' },
+      { title: 'Geospatial Index & Matching', prompt: 'Chọn cấu trúc index không gian để tìm lân cận và cơ chế ghép tránh gán trùng tài xế.', hint: 'Geohash 6 ký tự ≈ 1.2km, query 9 cell (center + 8 neighbor). QuadTree hoặc H3 thích ứng mật độ không đều. Distributed lock (Redis SET NX EX 10s) chống double-assign.' },
+      { title: 'Scale & Trade-offs', prompt: 'Mở rộng WebSocket, phân tán location update và cân đối độ chính xác với chi phí.', hint: 'Mỗi node WebSocket ~50 nghìn kết nối, cần sticky session. Đẩy update qua Redis Pub/Sub hoặc Kafka. Giảm tần suất GPS xuống 10-15s khi xe đỗ để tiết kiệm pin và tải.' },
+    ],
+    rubric: [
+      'Có ước lượng cụ thể QPS location update và QPS tìm kiếm',
+      'Chọn WebSocket cho real-time và giải thích lý do so với polling',
+      'Tách vị trí nóng (Redis GEO) khỏi lịch sử chuyến (SQL)',
+      'Chọn cấu trúc index không gian (Geohash/QuadTree/H3) kèm lý do',
+      'Nêu cơ chế chống double-assign và ít nhất 2 trade-offs khi scale',
+    ],
+  },
 }

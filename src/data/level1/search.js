@@ -261,4 +261,108 @@ console.log(\`distance = \${levenshtein('kitten','sitting')} operations\`);`,
     { type: 'info', icon: '📑', title: 'Inverted Index', body: 'Full-text search. Elasticsearch/Lucene dùng cách này. Rất nhanh cho OR/AND queries.' },
     { type: 'warning', icon: '🌀', title: 'Fuzzy Search', body: 'Levenshtein O(m×n). Dùng khi cần chịu typo. Nên kết hợp với BK-Tree để tăng tốc.' },
   ],
+  quiz: [
+    {
+      q: 'Trie (Prefix Tree) có độ phức tạp tìm kiếm prefix là bao nhiêu, với m là độ dài từ?',
+      options: [
+        'O(n) với n là số từ trong từ điển',
+        'O(n log n)',
+        'O(m), không phụ thuộc số lượng từ',
+        'O(m × n)',
+      ],
+      answer: 2,
+      explain: 'Trie search chỉ traverse theo từng ký tự của prefix nên là O(m) với m là độ dài từ, hoàn toàn không phụ thuộc vào số lượng từ trong từ điển.',
+    },
+    {
+      q: 'Inverted Index ánh xạ dữ liệu theo hướng nào?',
+      options: [
+        'Từ term đến danh sách documents chứa term đó (posting list)',
+        'Từ document đến danh sách các từ trong đó',
+        'Từ ký tự đến các node con trong cây',
+        'Từ query đến kết quả đã cache',
+      ],
+      answer: 0,
+      explain: 'Inverted Index ánh xạ term đến posting list (danh sách docId chứa term). Đây là cơ chế cốt lõi của Elasticsearch và Lucene, cho phép merge posting list với AND/OR rất nhanh.',
+    },
+    {
+      q: 'BM25 khác TF-IDF chủ yếu ở điểm nào?',
+      options: [
+        'BM25 không cần inverted index',
+        'BM25 chỉ hoạt động trên số, không trên text',
+        'BM25 luôn cho score tăng tuyến tính theo tần suất từ',
+        'BM25 xử lý term saturation và chuẩn hóa theo độ dài document',
+      ],
+      answer: 3,
+      explain: 'BM25 xử lý term saturation (TF cao quá thì thêm nữa cũng không tăng score nhiều) và chuẩn hóa theo độ dài document, nên chính xác hơn TF-IDF vốn tăng tuyến tính.',
+    },
+    {
+      q: 'Edit Distance (Levenshtein) giữa kitten và sitting bằng bao nhiêu?',
+      options: [
+        '1',
+        '3',
+        '5',
+        '7',
+      ],
+      answer: 1,
+      explain: 'Cần 3 phép biến đổi: k→s (replace), e→i (replace), và thêm g (insert). Do đó edit distance bằng 3.',
+    },
+  ],
+  exercises: [
+    {
+      id: 'rank-desc-order',
+      title: 'Sửa thứ tự ranking kết quả tìm kiếm',
+      task: 'Kết quả tìm kiếm đang được sắp xếp TĂNG dần theo score (số lần khớp từ khóa), nên document liên quan nhất lại nằm cuối. Hãy sửa để sắp xếp GIẢM dần, document điểm cao nhất lên đầu. Output kỳ vọng: Doc2 (score 2) đứng trước Doc1 (score 1).',
+      buggyCode: `// Đếm số lần từ khóa xuất hiện (term frequency) rồi xếp hạng
+var docs = [
+  { id: 1, text: 'javascript backend node' },
+  { id: 2, text: 'javascript javascript frontend' },
+  { id: 3, text: 'python backend' },
+];
+var query = 'javascript';
+
+function score(text, q) {
+  var words = text.split(' ');
+  var c = 0;
+  for (var i = 0; i < words.length; i++) if (words[i] === q) c++;
+  return c;
+}
+
+var results = [];
+for (var i = 0; i < docs.length; i++) {
+  var s = score(docs[i].text, query);
+  if (s > 0) results.push({ id: docs[i].id, score: s });
+}
+
+// BUG: sắp xếp TĂNG dần -> doc liên quan nhất bị xuống cuối
+results.sort(function(a, b) { return a.score - b.score; });
+
+results.forEach(function(r) { console.log('Doc' + r.id + ' score=' + r.score); });`,
+      expectedOutput: 'Doc2 score=2\nDoc1 score=1',
+      hint: 'Để xếp GIẢM dần theo score, đổi comparator thành b.score - a.score.',
+      solution: `var docs = [
+  { id: 1, text: 'javascript backend node' },
+  { id: 2, text: 'javascript javascript frontend' },
+  { id: 3, text: 'python backend' },
+];
+var query = 'javascript';
+
+function score(text, q) {
+  var words = text.split(' ');
+  var c = 0;
+  for (var i = 0; i < words.length; i++) if (words[i] === q) c++;
+  return c;
+}
+
+var results = [];
+for (var i = 0; i < docs.length; i++) {
+  var s = score(docs[i].text, query);
+  if (s > 0) results.push({ id: docs[i].id, score: s });
+}
+
+// FIX: sắp xếp GIẢM dần theo score
+results.sort(function(a, b) { return b.score - a.score; });
+
+results.forEach(function(r) { console.log('Doc' + r.id + ' score=' + r.score); });`,
+    },
+  ],
 }

@@ -168,5 +168,55 @@ service.confirmBooking('User_Bob', client2Version);`
     { type: 'success', icon: '📋', title: 'Hàng chờ ảo (Virtual Waiting Room)', body: 'Với các sự kiện cực hot, việc sử dụng các hàng chờ ảo (như Queue-It) ở tầng Gateway giúp chặn bớt lưu lượng, xếp hàng và chỉ cho phép một lượng nhỏ user truy cập hệ thống ở mỗi thời điểm.' },
     { type: 'info', icon: '🔑', title: 'Tại sao Redis tốt hơn SQL Lock?', body: 'Việc sử dụng Distributed Lock trên Redis (bằng bộ nhớ RAM) giúp giảm thiểu các truy vấn khóa chặn (blocking query) kéo dài trên Database SQL, giảm nguy cơ sập DB do deadlock.' },
     { type: 'tip', icon: '⚡', title: 'Invalidate cache nhanh chóng qua Pub/Sub', body: 'Khi một ghế được đặt thành công, hãy gửi tin nhắn thông báo qua Redis Pub/Sub để tất cả các API nodes lập tức invalidate local cache, hiển thị trạng thái ghế "Đã bán" cho các người dùng khác.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Distributed Lock giữ ghế trong ticket booking thường được triển khai như thế nào?',
+      options: ['Dùng SQL SELECT FOR UPDATE giữ khóa vĩnh viễn trên hàng ghế', 'Redis SETNX kèm TTL, nếu không acquire được thì ghế đang có người chọn', 'Lưu trạng thái ghế trong localStorage của client', 'Broadcast toàn bộ ghế qua WebSocket cho mọi user cùng lúc'],
+      answer: 1,
+      explain: 'Khi user chọn ghế sẽ acquire lock cho seat ID bằng Redis SETNX với TTL khoảng 10 phút; nếu không acquire được nghĩa là ghế đang bị người khác giữ.',
+    },
+    {
+      q: 'Optimistic Locking phù hợp nhất trong trường hợp nào?',
+      options: ['Khi hầu hết users cùng tranh đúng một ghế hot duy nhất', 'Khi cần khóa ghế ngay tại thời điểm user vừa mở xem sơ đồ', 'Khi hệ thống hoàn toàn không dùng tới Database', 'Khi conflict rate thấp, đa số users đặt những ghế khác nhau'],
+      answer: 3,
+      explain: 'Optimistic Locking không khóa ngay khi xem mà chỉ check version/status lúc confirm, giảm lock contention và tốt hơn khi tỉ lệ xung đột thấp.',
+    },
+    {
+      q: 'Virtual Waiting Queue giúp giải quyết traffic spike bằng cách nào?',
+      options: ['Serializes demand, xử lý từng batch thay vì để tất cả users hit server đồng thời', 'Xóa bỏ hoàn toàn concurrency issues mà không cần bất kỳ lock nào', 'Tăng gấp đôi số lượng ghế có thể bán ra trong sự kiện', 'Mã hóa thông tin thanh toán của từng user trong hàng chờ'],
+      answer: 0,
+      explain: 'Queue không xóa bỏ concurrency issues nhưng serializes demand: user nhận position in queue và khi đến lượt mới được redirect vào booking flow, giúp xử lý theo batch.',
+    },
+    {
+      q: 'Ưu điểm của việc dùng Redis keyspace notifications cho Reservation Timeout là gì?',
+      options: ['Tăng TTL của lock lên vô hạn để không bao giờ mất ghế', 'Chỉ cần chạy background job polling mỗi giờ một lần', 'React gần real-time ngay khi key expire thay vì phải polling liên tục', 'Xóa toàn bộ ghế trong hệ thống mỗi khi có một timeout'],
+      answer: 2,
+      explain: 'Keyspace notifications (notify-keyspace-events Ex) cho phép hệ thống nhận event ngay khi key hết hạn để release ghế gần real-time, thay vì polling định kỳ.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế hệ thống bán vé cho sự kiện hot: hàng triệu người tranh mua trong vài giây mà không bán trùng ghế.',
+    scale: ['1 triệu vé mở bán trong 10 phút', '2 triệu người dùng đồng thời lúc mở cổng', 'Giữ ghế tối đa 10 phút chờ thanh toán', 'p99 xem sơ đồ ghế < 1 giây'],
+    requirements: [
+      'Hiển thị sơ đồ ghế và trạng thái còn/hết real-time',
+      'Giữ ghế tạm khi user chọn, không cho người khác cướp',
+      'Tuyệt đối không bán trùng một ghế cho hai người',
+      'Tự động nhả ghế nếu user không thanh toán kịp',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng QPS đọc sơ đồ ghế và QPS ghi đặt ghế lúc mở bán.', hint: '2 triệu user cùng xem, mỗi người vài request → hàng trăm nghìn read/s (read-heavy). Ghi đặt ghế thấp hơn nhiều nhưng cần strict ordering. Tách read và write.' },
+      { title: 'API Design', prompt: 'Thiết kế API xem ghế, giữ ghế và xác nhận. Làm sao chặn bớt dòng traffic đỉnh?', hint: 'GET /api/events/:id/seats (cache), POST /api/seats/:id/hold (acquire lock), POST /api/bookings/confirm. Đặt virtual waiting queue ở gateway để nhả từng batch user vào.' },
+      { title: 'Data Model', prompt: 'Thiết kế lưu trạng thái ghế, khóa giữ ghế và reservation tạm. Đặt TTL ở đâu?', hint: 'seats(id, status, version) cho optimistic locking. Khóa giữ ghế trên Redis SET NX EX ~600s. temp_reservations(seat_id, user_id, expires_at) để cleanup khi timeout.' },
+      { title: 'Concurrency & Anti-Oversell', prompt: 'Đảm bảo một ghế chỉ bán cho đúng một người khi hàng nghìn request tranh cùng lúc.', hint: 'Distributed lock (Redis SETNX + TTL) cho ghế hot. Optimistic locking (check version trong UPDATE ... WHERE version=?) cho phần lớn ca. Check-then-act phải nằm trong một transaction.' },
+      { title: 'Scale & Trade-offs', prompt: 'Xử lý flash sale, nhả ghế hết hạn và cân đối consistency với UX.', hint: 'Virtual queue serializes demand, xử lý theo batch. Reservation timeout dùng Redis keyspace notification (gần real-time) thay vì polling. CQRS: read side cache eventual-consistent, write side strict. Trade-off: TTL ngắn tránh hoarding vs đủ dài để kịp trả tiền.' },
+    ],
+    rubric: [
+      'Có ước lượng QPS đọc/ghi và nhận ra đây là read-heavy khi mở bán',
+      'API có giữ ghế, xác nhận và cơ chế virtual queue chặn traffic đỉnh',
+      'Data model có version cho optimistic locking và TTL cho reservation',
+      'Giải thích cơ chế chống oversell (distributed lock + optimistic locking)',
+      'Nêu cách nhả ghế hết hạn và ít nhất 2 trade-offs khi scale',
+    ],
+  },
 }

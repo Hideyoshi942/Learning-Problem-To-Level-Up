@@ -204,5 +204,55 @@ serverA.sendMessage('Alice', 'Bob', 'Chào Bob, mình ở server A nhé!');`
     { type: 'success', icon: '🟢', title: 'Redis là công cụ Presence tuyệt vời', body: 'Dùng Redis với thời gian hết hạn TTL tự động cập nhật qua Heartbeat là giải pháp nhẹ nhàng nhất để lưu trữ trạng thái Online/Offline mà không gây tải cho SQL Database.' },
     { type: 'info', icon: '⚡', title: 'Cân nhắc Server-Sent Events (SSE)', body: 'Nếu bạn đang làm tính năng chỉ yêu cầu luồng dữ liệu 1 chiều từ Server xuống Client (như Notification, Live Feed), SSE là một sự thay thế nhẹ nhàng, đơn giản và ít tốn tài nguyên hơn WebSocket.' },
     { type: 'tip', icon: '🔢', title: 'Giải quyết thứ tự tin nhắn', body: 'Đừng dùng timestamp thuần túy để sắp xếp tin nhắn (nhiều tin nhắn trong cùng 1 mili giây sẽ bị sai lệch). Hãy sử dụng ID tăng dần tự động của Database hoặc chuỗi Sequence ID cục bộ do client sinh ra trước.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'WebSocket khác biệt cơ bản gì so với HTTP request-response thông thường?',
+      options: ['Chỉ cho phép client gửi request, server không bao giờ push được', 'Là kết nối stateless, tự đóng ngay sau mỗi message', 'Chỉ hoạt động thông qua HTTP polling định kỳ', 'Là kết nối full-duplex cho phép server push message đến client bất kỳ lúc nào'],
+      answer: 3,
+      explain: 'WebSocket là full-duplex, bidirectional trên một TCP connection persistent, nên server có thể chủ động push message cho client.',
+    },
+    {
+      q: 'Vì sao không thể dùng Load Balancer kiểu Round-Robin thông thường cho WebSocket?',
+      options: ['Vì WebSocket chỉ hỗ trợ đúng một server duy nhất', 'Vì WebSocket là kết nối stateful, cần Sticky Session để giữ client ở đúng server', 'Vì WebSocket hoàn toàn không tương thích với HTTP', 'Vì Round-Robin làm tăng độ trễ của tin nhắn'],
+      answer: 1,
+      explain: 'WebSocket giữ kết nối liên tục (stateful) nên cần Sticky Session hoặc pub/sub qua Redis để handshake và connection đi cùng một server.',
+    },
+    {
+      q: 'Khi gửi tin nhắn tới một group chat nhỏ (dưới 100 thành viên), chiến lược nào phù hợp nhất?',
+      options: ['Fan-out on Write: copy ngay tin nhắn vào inbox của từng thành viên', 'Fan-out on Read: chỉ lưu 1 bản, khi thành viên đọc mới query', 'Không cần fan-out, gửi trực tiếp qua HTTP POST', 'Dùng Long Polling cho toàn bộ thành viên'],
+      answer: 0,
+      explain: 'Group nhỏ nên dùng Fan-out on Write (fast read, slow write chấp nhận được). Group lớn mới cân nhắc Fan-out on Read.',
+    },
+    {
+      q: 'Cách chuẩn để triển khai hệ thống Presence (online/offline) là gì?',
+      options: ['Query SQL Database mỗi lần cần kiểm tra trạng thái', 'Lưu trạng thái trong RAM của một server duy nhất', 'Dùng Redis với TTL, renew qua heartbeat mỗi 30s', 'Gửi email thông báo mỗi khi user đổi trạng thái'],
+      answer: 2,
+      explain: 'Set key presence trong Redis với TTL khi connect, heartbeat renew TTL, disconnect thì xóa key. Query DB cho presence là quá chậm.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế một hệ thống chat real-time như Messenger hoặc WhatsApp: hỗ trợ 1-1, group chat và trạng thái online.',
+    scale: ['50 triệu DAU, cao điểm 10 triệu kết nối đồng thời', '40 tỷ tin nhắn/ngày', 'p99 gửi tin < 100ms', 'Lưu lịch sử tin nhắn tối thiểu 1 năm'],
+    requirements: [
+      'Nhắn tin 1-1 và group real-time kèm biên nhận đã gửi/đã nhận',
+      'Lưu và đồng bộ tin nhắn khi user offline rồi online lại',
+      'Hiển thị trạng thái online/offline và last seen',
+      '(Tuỳ chọn) đảm bảo đúng thứ tự tin nhắn trong một hội thoại',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng số kết nối đồng thời, QPS tin nhắn, RAM giữ kết nối và dung lượng lưu trữ.', hint: '40 tỷ tin/ngày ≈ 460.000 tin/s (cao điểm x3). 10 triệu WebSocket đồng thời, mỗi kết nối ~10KB RAM → ~100GB RAM chỉ để duy trì kết nối, cần hàng nghìn chat server. Lưu 40 tỷ x 300B ≈ 12TB/ngày.' },
+      { title: 'API Design', prompt: 'Định nghĩa các sự kiện WebSocket real-time và REST endpoint tải lịch sử.', hint: 'WS events: sendMessage, messageDelivered, typing, presenceUpdate. REST: GET /conversations, GET /conversations/{id}/messages?before=cursor. Nâng cấp qua HTTP handshake rồi giữ kết nối persistent.' },
+      { title: 'Data Model', prompt: 'Thiết kế schema lưu tin nhắn, hội thoại và inbox. SQL hay NoSQL?', hint: 'messages(message_id snowflake, conversation_id, sender_id, content, created_at). Ghi-nhiều + tra theo conversation_id → wide-column store (Cassandra/HBase) phân vùng theo conversation_id, sắp theo message_id tăng dần.' },
+      { title: 'Realtime Delivery & Presence', prompt: 'Làm sao chuyển tin giữa 2 user ở 2 server khác nhau và quản lý presence cùng fan-out group?', hint: 'Sticky session ở LB cho WebSocket. Server A publish tin qua Redis Pub/Sub hoặc Kafka → server B đang giữ kết nối người nhận đẩy xuống socket. Presence: Redis key TTL 60s, heartbeat 30s renew, disconnect thì xóa. Group nhỏ (< 100) fan-out on write, group lớn/broadcast fan-out on read.' },
+      { title: 'Scale & Trade-offs', prompt: 'Bàn về sticky session, thứ tự tin nhắn, presence fan-out và WebSocket vs Long Polling/SSE.', hint: 'Thứ tự: dùng sequence ID / snowflake tăng dần thay vì timestamp thuần (nhiều tin trong 1ms sẽ lệch). User có hàng nghìn bạn bè tạo presence fan-out lớn → gom batch hoặc chỉ cập nhật khi bạn bè đang xem. Long Polling/SSE làm fallback khi proxy chặn WS.' },
+    ],
+    rubric: [
+      'Có ước lượng cụ thể số kết nối đồng thời, QPS tin nhắn và RAM/dung lượng',
+      'API tách bạch kênh real-time (WebSocket) và tải lịch sử (REST)',
+      'Data model chịu ghi-nhiều, tra cứu theo hội thoại và giữ đúng thứ tự',
+      'Giải thích cơ chế delivery đa server (Pub/Sub-Kafka) và presence bằng Redis TTL',
+      'Nêu được ít nhất 2 trade-offs (sticky session, fan-out presence, WS vs SSE)',
+    ],
+  },
 }

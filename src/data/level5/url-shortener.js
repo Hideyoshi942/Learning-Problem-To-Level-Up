@@ -154,5 +154,55 @@ console.log('Query "fake404":', filter.contains('fake404') ? 'Có thể tồn t�
     { type: 'success', icon: '⚡', title: 'Lựa chọn HTTP 301 vs 302 Redirection', body: 'Hãy dùng HTTP 301 (Permanent Redirect) nếu bạn muốn giảm tải tối đa cho server (browser tự lưu cache). Hãy dùng HTTP 302 (Temporary Redirect) nếu bạn cần thu thập analytics trên mọi click chuột của người dùng.' },
     { type: 'info', icon: '🔢', title: 'Tại sao lại là Base62 thay vì Base64?', body: 'Base64 chứa các ký tự đặc biệt như "+" và "/" có ý nghĩa riêng trên URL và có thể gây lỗi định tuyến. Base62 (0-9, a-z, A-Z) hoàn toàn URL-safe mà vẫn đảm bảo độ nén dữ liệu cực tốt.' },
     { type: 'tip', icon: '📈', title: 'Đồng bộ Click Analytics qua MQ', body: 'Không cập nhật trực tiếp cột click_count trong Database SQL trên mỗi lượt truy cập (gây write bottleneck). Hãy đẩy click event vào Kafka/RabbitMQ và gom batch xử lý bất đồng bộ.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Vì sao không nên dùng ID tự tăng thuần túy rồi mã hóa Base62 trực tiếp làm mã rút gọn?',
+      options: ['Vì Base62 không thể mã hóa được các số lớn', 'Vì nó làm lộ tổng số lượng link và tốc độ tăng trưởng của hệ thống', 'Vì nó tạo ra mã dài hơn hẳn so với Base64', 'Vì nó gây xung đột mã rút gọn thường xuyên hơn'],
+      answer: 1,
+      explain: 'ID tự tăng (1, 2, 3...) encode trực tiếp làm đối thủ dễ đoán được số lượng giao dịch và tốc độ tăng trưởng. Nên xáo trộn giá trị trước khi encode.',
+    },
+    {
+      q: 'Với 6 ký tự Base62, hệ thống có thể tạo ra khoảng bao nhiêu mã unique?',
+      options: ['Khoảng 3.5 nghìn tỷ', 'Khoảng 1 triệu', 'Khoảng 56 tỷ', 'Khoảng 62 nghìn'],
+      answer: 2,
+      explain: '62^6 xấp xỉ 56.8 tỷ mã. Cần 7 ký tự mới đạt khoảng 3.5 nghìn tỷ.',
+    },
+    {
+      q: 'Vì sao URL Shortener thường đạt cache hit rate cực cao?',
+      options: ['Vì khoảng 80% traffic thường tập trung vào 20% URLs theo nguyên lý Pareto', 'Vì mọi URL bắt buộc phải được cache vô thời hạn', 'Vì đây là workload thiên về ghi (write-heavy)', 'Vì Redis tự động nhân bản toàn bộ database vào RAM'],
+      answer: 0,
+      explain: 'Đây là read-heavy workload và 80% traffic đến 20% URLs (Pareto), nên phần lớn request đều trúng cache.',
+    },
+    {
+      q: 'Bloom Filter mang lại lợi ích gì cho URL Shortener?',
+      options: ['Tăng độ chính xác của việc mã hóa Base62', 'Nén dữ liệu URL để tiết kiệm bộ nhớ lưu trữ', 'Cân bằng tải giữa các server redirect', 'Chặn nhanh các truy vấn mã không tồn tại để chống sập DB'],
+      answer: 3,
+      explain: 'Nếu Bloom Filter báo một mã chắc chắn không tồn tại, hệ thống trả 404 ngay mà không cần chọc vào Cache/DB, chống cache penetration.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế một URL Shortener như bit.ly/tinyurl: chịu tải đọc-nhiều và độ trễ redirect thấp.',
+    scale: ['100 triệu URL mới/ngày', 'Đọc:Ghi = 100:1', 'Lưu tối thiểu 5 năm', 'p99 redirect < 50ms'],
+    requirements: [
+      'Rút gọn URL dài thành mã ngắn unique',
+      'Redirect mã ngắn về URL gốc với độ trễ thấp',
+      'Chống đoán mã và không lộ tốc độ tăng trưởng',
+      '(Tuỳ chọn) đếm số click phục vụ analytics',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng QPS ghi/đọc, dung lượng lưu 5 năm, và không gian mã cần thiết.', hint: '100M/ngày ≈ 1.160 ghi/s; đọc x100 ≈ 116.000/s. 5 năm ≈ 1.8 tỷ record, mỗi record ~500B → ~1TB. Base62 7 ký tự = 3.5 nghìn tỷ mã, dư sức.' },
+      { title: 'API Design', prompt: 'Định nghĩa endpoint tạo và redirect. Chọn mã trạng thái HTTP phù hợp.', hint: 'POST /api/shorten {longUrl} → 201 {shortUrl}. GET /{code} → 301 (browser cache, giảm tải) hoặc 302 (giữ được analytics mọi click).' },
+      { title: 'Data Model', prompt: 'Thiết kế schema lưu mapping code ↔ url. SQL hay NoSQL?', hint: 'urls(short_code unique-index, long_url, user_id, created_at, expires_at). Read-heavy + tra cứu theo key → KV store (DynamoDB/Cassandra) scale tốt; SQL đủ đến ~500M record.' },
+      { title: 'Code Generation', prompt: 'Sinh mã ngắn sao cho unique, không collision, không lộ metrics?', hint: 'Counter phân tán (Snowflake) + Base62; XOR/Feistel để xáo trộn trước khi encode (che tăng trưởng). Random + check-collision là phương án khác nhưng tốn round-trip.' },
+      { title: 'Scale & Trade-offs', prompt: 'Cache, chống cache penetration, sharding, analytics.', hint: 'Cache Redis cho read-heavy (Pareto 80/20) + TTL cho link tạm. Bloom filter chặn mã không tồn tại. Shard theo hash(short_code). Đếm click qua MQ (batch) để tránh write bottleneck.' },
+    ],
+    rubric: [
+      'Có ước lượng cụ thể QPS đọc/ghi và dung lượng lưu trữ',
+      'API rõ ràng và giải thích lựa chọn 301 vs 302',
+      'Chọn cách sinh mã kèm cơ chế đảm bảo unique và không lộ metrics',
+      'Có chiến lược cache cho read-heavy và chống cache penetration',
+      'Nêu được ít nhất 2 trade-offs (301/302, SQL/NoSQL, batch analytics)',
+    ],
+  },
 }

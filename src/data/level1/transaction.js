@@ -308,4 +308,96 @@ console.log('\\n💡 Prevention: always acquire locks in same order!');`,
     { type: 'warning', icon: '⚖️', title: 'Isolation vs Performance', body: 'Isolation cao hơn = an toàn hơn nhưng chậm hơn. READ COMMITTED là điểm cân bằng phổ biến nhất.' },
     { type: 'danger', icon: '💀', title: 'Tránh Deadlock', body: 'Luôn acquire locks theo cùng thứ tự. Dùng lock timeout. Consider optimistic locking cho read-heavy workloads.' },
   ],
+  quiz: [
+    {
+      q: 'Trong ACID, tính chất nào đảm bảo tất cả thao tác trong transaction hoặc thành công hết hoặc rollback hết (all-or-nothing)?',
+      options: [
+        'Atomicity',
+        'Consistency',
+        'Isolation',
+        'Durability',
+      ],
+      answer: 0,
+      explain: 'Atomicity đảm bảo all-or-nothing: hoặc mọi thao tác cùng commit, hoặc mọi thứ bị rollback, không có trạng thái nửa vời.',
+    },
+    {
+      q: 'Isolation level nào ngăn được Dirty Read nhưng vẫn cho phép Non-repeatable Read, và là mặc định của PostgreSQL?',
+      options: [
+        'READ UNCOMMITTED',
+        'SERIALIZABLE',
+        'READ COMMITTED',
+        'REPEATABLE READ',
+      ],
+      answer: 2,
+      explain: 'READ COMMITTED chỉ thấy data đã commit nên tránh Dirty Read, nhưng đọc cùng row 2 lần vẫn có thể khác nhau (Non-repeatable Read). Đây là default của PostgreSQL.',
+    },
+    {
+      q: 'MVCC (Multi-Version Concurrency Control) hoạt động dựa trên nguyên lý nào?',
+      options: [
+        'Khóa toàn bộ bảng mỗi khi có write',
+        'Không cho phép read và write chạy song song',
+        'Dùng chung một version duy nhất cho mọi transaction',
+        'Mỗi transaction thấy một snapshot của database tại thời điểm bắt đầu',
+      ],
+      answer: 3,
+      explain: 'MVCC cho read và write chạy song song không block nhau bằng cách cho mỗi transaction thấy một snapshot riêng. Cái giá là dead tuples cần VACUUM dọn dẹp.',
+    },
+    {
+      q: 'Cách phòng tránh Deadlock hiệu quả nhất theo bài là gì?',
+      options: [
+        'Tăng isolation level lên SERIALIZABLE',
+        'Luôn acquire locks theo cùng một thứ tự, ví dụ theo id tăng dần',
+        'Tắt hoàn toàn cơ chế locking',
+        'Giữ transaction chạy càng lâu càng tốt',
+      ],
+      answer: 1,
+      explain: 'Deadlock là circular wait khi các transaction lock chéo nhau. Nếu mọi transaction luôn acquire lock theo cùng thứ tự (ví dụ theo id) thì không thể tạo vòng lặp chờ.',
+    },
+  ],
+  exercises: [
+    {
+      id: 'fix-atomic-transfer',
+      title: 'Sửa lỗi transfer không atomic làm hụt tổng tiền',
+      task: 'Hàm transfer không đảm bảo tính atomic: nó trừ tiền tài khoản nguồn TRƯỚC rồi mới kiểm tra số dư, nếu không đủ thì return nhưng KHÔNG hoàn lại số tiền đã trừ nên tổng tiền bị hụt. Hãy sửa để hoặc cả hai bước cùng xảy ra hoặc không đổi gì cả (rollback), giữ tổng tiền không đổi. Output kỳ vọng: Tong sau = 150 (bằng Tong truoc), A = 100, B = 50.',
+      buggyCode: `// BUG: khong atomic - tru tien A TRUOC roi moi kiem tra so du,
+// neu khong du thi return nhung KHONG hoan lai -> tong tien bi hut.
+var accounts = { A: 100, B: 50 };
+function total() { return accounts.A + accounts.B; }
+console.log('Tong truoc: ' + total());
+
+function transfer(from, to, amount) {
+  accounts[from] -= amount;          // tru tien truoc
+  if (accounts[from] < 0) {          // phat hien khong du SAU khi da tru
+    console.log('Loi: khong du tien!');
+    return;                          // BUG: da tru nhung khong hoan lai
+  }
+  accounts[to] += amount;
+}
+
+transfer('A', 'B', 120);             // A chi co 100, chuyen 120 -> loi giua chung
+console.log('A = ' + accounts.A);
+console.log('B = ' + accounts.B);
+console.log('Tong sau: ' + total());`,
+      expectedOutput: 'Tong truoc: 150\nLoi: khong du tien!\nA = 100\nB = 50\nTong sau: 150',
+      hint: 'Kiểm tra số dư có đủ hay không TRƯỚC khi trừ tiền (validate rồi mới commit). Nếu không đủ thì return ngay khi chưa thay đổi bất kỳ tài khoản nào, nhờ vậy tổng tiền được bảo toàn.',
+      solution: `// FIX: kiem tra so du TRUOC khi tru -> hoac lam ca hai, hoac khong lam gi.
+var accounts = { A: 100, B: 50 };
+function total() { return accounts.A + accounts.B; }
+console.log('Tong truoc: ' + total());
+
+function transfer(from, to, amount) {
+  if (accounts[from] < amount) {     // kiem tra TRUOC khi tru
+    console.log('Loi: khong du tien!');
+    return;                          // khong doi so du -> tong khong doi
+  }
+  accounts[from] -= amount;
+  accounts[to] += amount;
+}
+
+transfer('A', 'B', 120);
+console.log('A = ' + accounts.A);
+console.log('B = ' + accounts.B);
+console.log('Tong sau: ' + total());`,
+    },
+  ],
 }

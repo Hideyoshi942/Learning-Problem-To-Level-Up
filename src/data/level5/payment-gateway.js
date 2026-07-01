@@ -171,5 +171,55 @@ auditSystem.audit();`
     { type: 'success', icon: '🔒', title: 'Tokenization giảm thiểu phạm vi audit PCI-DSS', body: 'Hãy luôn sử dụng các giải pháp Tokenize thẻ ngay từ phía Frontend (như Stripe.js). Bằng cách này, thông tin thẻ không bao giờ đi qua máy chủ của bạn, giúp bạn đạt chuẩn bảo mật PCI-DSS cực kỳ dễ dàng.' },
     { type: 'info', icon: '📊', title: 'Nguyên lý Sổ Cái Kép (Double-Entry Bookkeeping)', body: 'Trong các hệ thống tài chính, dữ liệu không được xóa hoặc cập nhật đè. Mọi thay đổi số dư phải được ghi nhận dưới dạng hai bút toán đối ứng: Có (Credit) và Nợ (Debit). Điều này đảm bảo tính minh bạch và khả năng kiểm toán.' },
     { type: 'tip', icon: '📡', title: 'Thiết kế Webhook kiên cường', body: 'Webhook có thể bị gửi trễ hoặc gửi lặp lại. Hãy thiết kế webhook endpoint có tính idempotent, kiểm tra chữ ký số (Signature Verification) để tránh giả mạo và phản hồi HTTP 200 ngay trước khi xử lý logic nặng bất đồng bộ.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Idempotency Key trong xử lý thanh toán đảm bảo điều gì?',
+      options: ['Tăng tốc độ xử lý giao dịch bằng cache phía CDN', 'Mã hóa thông tin thẻ trước khi gửi lên server', 'Xử lý nhiều lần cùng một request chỉ charge tiền đúng một lần', 'Phân tán giao dịch đều qua nhiều server khác nhau'],
+      answer: 2,
+      explain: 'Idempotency Key (UUID do client tạo) giúp server nhận diện request trùng lặp và trả về cached result, nên dù gửi lại nhiều lần cũng chỉ trừ tiền một lần.',
+    },
+    {
+      q: 'Khi một bước phía sau trong Saga bị lỗi thì điều gì xảy ra?',
+      options: ['Các compensating transaction chạy theo thứ tự ngược lại để hoàn tác những bước đã thành công', 'Toàn hệ thống rollback tự động bằng một transaction ACID duy nhất', 'Bước lỗi bị bỏ qua và các bước còn lại vẫn tiếp tục chạy', 'Giao dịch được thử lại vô hạn cho tới khi thành công'],
+      answer: 0,
+      explain: 'Saga xử lý distributed transaction bằng cách gọi compensating transaction theo thứ tự đảo ngược để hoàn tác các bước đã hoàn tất trước khi xảy ra lỗi.',
+    },
+    {
+      q: 'Cách đơn giản nhất để tuân thủ PCI-DSS theo bài học là gì?',
+      options: ['Mã hóa card data rồi tự lưu trong DB của bạn', 'Chỉ chấp nhận thanh toán qua chuyển khoản ngân hàng', 'Tự xây dựng vault lưu thẻ đạt chuẩn Level 1', 'Không bao giờ chạm vào raw card data, tokenize thẻ ngay ở client side'],
+      answer: 3,
+      explain: 'Dùng Stripe.js/Braintree.js để tokenize thẻ ở client, server chỉ nhận token nên card data không đi qua hệ thống của bạn, giảm PCI scope xuống tối thiểu.',
+    },
+    {
+      q: 'Mục đích chính của Reconciliation trong payment gateway là gì?',
+      options: ['Tăng tốc độ gửi webhook từ cổng thanh toán', 'Đối chiếu transactions nội bộ với records từ payment processor để phát hiện chênh lệch', 'Tạo idempotency key cho mỗi giao dịch mới', 'Mã hóa dữ liệu thẻ tín dụng khi lưu trữ'],
+      answer: 1,
+      explain: 'Reconciliation chạy định kỳ để so khớp sổ cái nội bộ với records của Stripe/bank, phát hiện giao dịch thiếu, lệch số tiền hoặc mồ côi, đảm bảo financial integrity.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế một Payment Gateway xử lý thanh toán thẻ an toàn, không trừ tiền hai lần và sổ cái luôn khớp.',
+    scale: ['5 triệu giao dịch/ngày', 'Đỉnh 5 nghìn giao dịch/s lúc flash sale', 'Yêu cầu đối soát khớp 100%', 'p99 xác nhận thanh toán < 3 giây'],
+    requirements: [
+      'Xử lý thanh toán chính xác một lần dù client retry',
+      'Điều phối nhiều service (order, payment, inventory) an toàn',
+      'Bảo vệ dữ liệu thẻ theo chuẩn PCI-DSS',
+      'Đối soát định kỳ giữa hệ thống và cổng thanh toán',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng QPS trung bình và đỉnh, cùng dung lượng lưu lịch sử giao dịch nhiều năm.', hint: '5 triệu/ngày ≈ 58 giao dịch/s trung bình, đỉnh flash sale ~5 nghìn/s (gấp ~85 lần). Mỗi record ~1KB, 5 năm ≈ 9 tỷ record → cần partition theo thời gian.' },
+      { title: 'API Design', prompt: 'Thiết kế API charge và webhook nhận kết quả. Làm sao để retry an toàn?', hint: 'POST /api/charge kèm header Idempotency-Key (UUID do client tạo). Webhook endpoint phải idempotent, verify signature và trả 200 trước khi xử lý nặng bất đồng bộ.' },
+      { title: 'Data Model', prompt: 'Thiết kế bảng lưu giao dịch, idempotency key và sổ cái. Vì sao không update balance trực tiếp?', hint: 'Bảng idempotency_keys(key unique, response, expires_at TTL 24h). Sổ cái ghi kiểu double-entry (Debit/Credit), append-only, không update đè để đảm bảo audit.' },
+      { title: 'Idempotency & Consistency', prompt: 'Chống double-charge và giữ nhất quán khi giao dịch trải qua nhiều service.', hint: 'Idempotency key + unique index chống trừ tiền hai lần. Saga (orchestration) với compensating transaction (refund, cancel) thay cho 2PC vì 2PC khóa lâu và khó scale. Đối soát là lưới an toàn cuối.' },
+      { title: 'Scale & Trade-offs', prompt: 'Xử lý đỉnh tải, đảm bảo sổ cái khớp và cân đối consistency với availability.', hint: 'Hàng đợi (Kafka) hấp thụ đỉnh flash sale. Webhook (real-time) + reconciliation (batch hàng ngày) bù cho nhau vì webhook không đảm bảo delivery 100%. Trade-off: strict consistency vs throughput.' },
+    ],
+    rubric: [
+      'Có ước lượng QPS trung bình/đỉnh và dung lượng lưu trữ',
+      'API dùng Idempotency-Key và webhook idempotent có verify signature',
+      'Thiết kế sổ cái double-entry append-only, không update balance thô',
+      'Giải thích cơ chế chống double-charge và chọn Saga so với 2PC',
+      'Có cả webhook và reconciliation, nêu được ít nhất 2 trade-offs',
+    ],
+  },
 }

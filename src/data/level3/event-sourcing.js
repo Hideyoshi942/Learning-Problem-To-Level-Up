@@ -244,4 +244,50 @@ console.log(\`   Loaded from snapshot: \${result.fromSnapshot}\`);`,
     { type: 'info', icon: '🐛', title: 'Event Replay để fix bugs', body: 'Đây là superpower của Event Sourcing: khi tìm bug trong business logic, fix code và replay toàn bộ events → tự động recompute đúng state cho tất cả aggregates.' },
     { type: 'tip', icon: '⚠️', title: 'Không thể xóa events', body: 'Events là immutable và append-only. Để "undo" một operation, phải tạo compensating event mới (ví dụ: RefundIssued thay vì xóa PaymentCharged). Đây là trade-off cần chấp nhận.' },
   ],
+  quiz: [
+    {
+      q: 'Đặc điểm cốt lõi của một Event Store là gì?',
+      options: [
+        'Luôn UPDATE current state để tiết kiệm dung lượng',
+        'Tự động xóa các events cũ hơn 7 ngày',
+        'Cho phép DELETE events khi cần sửa lỗi logic',
+        'Chỉ APPEND events theo thứ tự, không bao giờ UPDATE hay DELETE',
+      ],
+      answer: 3,
+      explain: 'Event Store lưu tất cả events theo thứ tự và chỉ APPEND, không bao giờ UPDATE hay DELETE. State được rebuild bằng cách load và apply lần lượt các events.',
+    },
+    {
+      q: 'Snapshot giúp giải quyết vấn đề gì trong Event Sourcing?',
+      options: [
+        'Đảm bảo events không bao giờ bị mất',
+        'Tránh phải replay toàn bộ events từ đầu khi load một aggregate',
+        'Cho phép xóa các events cũ để giải phóng dung lượng',
+        'Đồng bộ tức thời giữa read model và write model',
+      ],
+      answer: 1,
+      explain: 'Snapshot là checkpoint state tại một thời điểm. Khi load, chỉ cần lấy snapshot gần nhất rồi replay các events sau đó, giảm load time từ O(n) xuống O(events_since_snapshot).',
+    },
+    {
+      q: 'Vì sao Event Replay được xem là tính năng mạnh nhất của Event Sourcing?',
+      options: [
+        'Vì nó giúp giảm dung lượng lưu trữ của event store',
+        'Vì nó tự động tạo snapshot cho mọi aggregate',
+        'Vì có thể fix bug trong logic rồi reprocess toàn bộ events để recompute đúng state',
+        'Vì nó tăng tốc độ ghi events vào database',
+      ],
+      answer: 2,
+      explain: 'Vì toàn bộ lịch sử được preserve, ta có thể fix code business logic rồi replay tất cả events để tự động recompute lại đúng state, đồng thời tạo được new projections.',
+    },
+    {
+      q: 'Cách đúng để undo một operation trong Event Sourcing là gì?',
+      options: [
+        'Tạo một compensating event mới, ví dụ RefundIssued',
+        'Xóa event gốc ra khỏi event store',
+        'UPDATE trực tiếp giá trị balance trong bảng',
+        'Rollback toàn bộ event store về trạng thái trước',
+      ],
+      answer: 0,
+      explain: 'Events là immutable và append-only nên không thể xóa. Để undo phải tạo compensating event mới (ví dụ RefundIssued thay vì xóa PaymentCharged).',
+    },
+  ],
 }

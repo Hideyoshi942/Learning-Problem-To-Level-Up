@@ -68,16 +68,259 @@ export default {
       example: '// Redis data types:\nawait redis.set("str", "hello");           // String\nawait redis.hset("user:1", "name", "Alice"); // Hash\nawait redis.lpush("queue", "job1");          // List\nawait redis.sadd("tags", "nodejs");          // Set\nawait redis.zadd("leaderboard", 100, "Alice"); // Sorted Set\n\n// Atomic increment (thread-safe):\nawait redis.incr("view_count"); // không cần lock!\n\n// Pipeline (batch commands):\nconst pipe = redis.pipeline();\npipe.get("a"); pipe.get("b"); pipe.get("c");\nconst results = await pipe.exec(); // 1 round trip',
     },
   ],
-  demos: [{
-    id: 'coming-soon',
-    label: '🚧 Coming Soon',
-    language: 'javascript',
-    code: `// Nội dung đang được chuẩn bị...\nconsole.log('Caching – demos coming soon!');`,
-  }],
-  interactive: null,
+  demos: [
+    {
+      id: 'cache-aside',
+      label: '🔀 Cache Aside (Hit/Miss)',
+      language: 'javascript',
+      code: `// Cache Aside (Lazy Loading): app tự quản lý cache
+// Đọc: check cache -> nếu MISS thì query DB -> ghi lại cache
+
+// Giả lập DB (chậm) + Redis cache (nhanh)
+let dbQueries = 0;
+const database = new Map([
+  [1, { id: 1, name: 'iPhone 15' }],
+  [2, { id: 2, name: 'Galaxy S24' }],
+]);
+function queryDB(id) {
+  dbQueries++;                 // đếm số lần "đánh" DB
+  return database.get(id) || null;
+}
+
+const cache = new Map();
+let hits = 0, misses = 0;
+
+function getProduct(id) {
+  // 1. Check cache
+  if (cache.has(id)) { hits++; return cache.get(id); }
+  // 2. MISS -> query DB
+  misses++;
+  const product = queryDB(id);
+  // 3. Ghi cache (chỉ khi có data)
+  if (product) cache.set(id, product);
+  return product;
+}
+
+// 8 request, nhiều id trùng nhau
+const reqs = [1, 1, 2, 1, 2, 1, 2, 2];
+for (const id of reqs) getProduct(id);
+
+console.log('Tổng request :', reqs.length);
+console.log('Cache HIT    :', hits);
+console.log('Cache MISS   :', misses);
+console.log('DB queries   :', dbQueries, '(= số lần MISS)');
+console.log('');
+const saved = Math.round((1 - dbQueries / reqs.length) * 100);
+console.log('⚡ Cache đỡ cho DB ' + saved + '% số lần đọc!');`,
+    },
+    {
+      id: 'stampede',
+      label: '🐂 Cache Stampede',
+      language: 'javascript',
+      code: `// Cache Stampede: rất nhiều request ập tới NGAY khi cache vừa hết hạn
+const N = 1000;
+
+// ❌ KHÔNG khoá: mọi request cùng thấy MISS -> cùng đánh DB
+function withoutLock() {
+  let cache = null;      // vừa expire, chưa ai ghi lại
+  let dbCalls = 0;
+  for (let i = 0; i < N; i++) {
+    if (cache === null) dbCalls++;   // đồng thời -> ai cũng miss -> ai cũng query
+  }
+  return dbCalls;
+}
+
+// ✅ CÓ mutex (single-flight): chỉ request ĐẦU fill cache, còn lại dùng lại
+function withLock() {
+  let cache = null;
+  let locked = false;
+  let dbCalls = 0;
+  for (let i = 0; i < N; i++) {
+    if (cache !== null) continue;    // đã có kết quả -> dùng lại, không query
+    if (!locked) {                   // chỉ 1 request giành được lock
+      locked = true;
+      dbCalls++;                     // đúng 1 lần đánh DB
+      cache = 'product-data';        // fill cache cho tất cả
+    }
+  }
+  return dbCalls;
+}
+
+console.log('Request đồng thời :', N);
+console.log('❌ Không khoá -> DB bị đánh :', withoutLock(), 'lần  (stampede!)');
+console.log('✅ Có mutex    -> DB bị đánh :', withLock(), 'lần');
+console.log('');
+console.log('⚡ Single-flight lock giảm tải DB tới ' + N + 'x!');`,
+    },
+    {
+      id: 'lru',
+      label: '🗑️ LRU Eviction',
+      language: 'javascript',
+      code: `// LRU Cache (capacity = 3): khi ĐẦY -> xoá phần tử ÍT dùng gần đây nhất
+// Mẹo: Map trong JS giữ THỨ TỰ chèn -> key đầu tiên = "cũ" nhất
+class LRUCache {
+  constructor(capacity) { this.cap = capacity; this.map = new Map(); }
+  get(key) {
+    if (!this.map.has(key)) return null;
+    const val = this.map.get(key);
+    this.map.delete(key);
+    this.map.set(key, val);          // đưa lên vị trí "mới nhất"
+    return val;
+  }
+  put(key, val) {
+    if (this.map.has(key)) this.map.delete(key);
+    else if (this.map.size >= this.cap) {
+      const oldest = this.map.keys().next().value;   // phần tử cũ nhất
+      this.map.delete(oldest);
+      console.log('  🗑️ evict "' + oldest + '" (ít dùng nhất)');
+    }
+    this.map.set(key, val);
+  }
+  keys() { return [...this.map.keys()].join(', '); }
+}
+
+const lru = new LRUCache(3);
+console.log('put A, B, C');
+lru.put('A', 1); lru.put('B', 2); lru.put('C', 3);
+console.log('  cache: ' + lru.keys());        // A, B, C
+
+console.log('get A   (A trở thành mới nhất)');
+lru.get('A');
+console.log('  cache: ' + lru.keys());        // B, C, A
+
+console.log('put D   (đầy -> evict phần tử ít dùng nhất)');
+lru.put('D', 4);
+console.log('  cache: ' + lru.keys());        // C, A, D`,
+    },
+  ],
+  interactive: {
+    title: '⚡ Cache Hit Ratio → độ trễ & tải DB',
+    inputLabel: 'Tỉ lệ cache hit (%) từ 0 đến 100',
+    inputPlaceholder: '90',
+    inputType: 'number',
+    run(value) {
+      const hit = Math.min(Math.max(parseFloat(value) || 0, 0), 100)
+      const miss = 100 - hit
+      const CACHE_MS = 1, DB_MS = 50
+      const avg = (hit / 100) * CACHE_MS + (miss / 100) * DB_MS
+      const total = 10000
+      const dbHits = Math.round((total * miss) / 100)
+      return [
+        `Giả định: cache ${CACHE_MS}ms, DB ${DB_MS}ms`,
+        ``,
+        `⏱️  Độ trễ trung bình: ${avg.toFixed(2)}ms/request`,
+        `    → nhanh gấp ${(DB_MS / avg).toFixed(1)}x so với luôn đọc DB (${DB_MS}ms)`,
+        ``,
+        `📉 Trên ${total.toLocaleString()} request:`,
+        `    DB nhận    : ${dbHits.toLocaleString()} query (${miss}%)`,
+        `    Cache xử lý : ${(total - dbHits).toLocaleString()} (${hit}%)`,
+        ``,
+        hit >= 95 ? '✅ Hit ratio tuyệt vời!'
+          : hit >= 80 ? '👍 Hit ratio tốt.'
+          : '⚠️  Hit ratio thấp → tăng TTL hoặc cache thêm dữ liệu nóng.',
+      ].join('\n')
+    },
+  },
   callouts: [
     { type: 'success', icon: '⚡', title: 'Cache Aside là default', body: 'Dùng Cache Aside cho hầu hết use cases. Simple, flexible, và dễ debug khi có vấn đề.' },
     { type: 'warning', icon: '🐂', title: 'Cache Stampede', body: 'Dùng Mutex Lock hoặc Probabilistic Early Expiration để tránh stampede khi cache expire.' },
     { type: 'danger', icon: '🔄', title: 'Cache Invalidation', body: 'Invalidate cache ngay khi DB update. Stale data là nguồn gốc của nhiều bugs khó tìm.' },
+  ],
+  quiz: [
+    {
+      q: 'Trong pattern Cache Aside, khi cache MISS thì AI đọc DB và ghi lại cache?',
+      options: [
+        'Bản thân cache tự động load từ DB',
+        'Application code tự làm',
+        'Database tự đẩy dữ liệu vào cache',
+        'Không cần ghi lại, lần sau vẫn cứ miss',
+      ],
+      answer: 1,
+      explain: 'Cache Aside (Lazy Loading): application kiểm tra cache, nếu miss thì TỰ query DB rồi TỰ ghi vào cache. Việc cache tự load hộ chính là pattern Read Through.',
+    },
+    {
+      q: 'Cache Stampede (thundering herd) là hiện tượng gì?',
+      options: [
+        'Cache dùng quá nhiều RAM',
+        'Dữ liệu trong cache bị sai lệch',
+        'Một key nóng hết hạn khiến hàng loạt request đồng thời cùng miss và cùng đánh DB',
+        'Cache bị hacker tấn công',
+      ],
+      answer: 2,
+      explain: 'Khi một key phổ biến expire, mọi request đến trong "khoảng trống" đều miss cùng lúc và cùng query DB → DB quá tải đột ngột.',
+    },
+    {
+      q: 'Cách chống Cache Stampede dùng trong demo là gì?',
+      options: [
+        'Dùng mutex/single-flight: chỉ 1 request nạp cache, số còn lại dùng lại kết quả',
+        'Tăng TTL lên vô hạn',
+        'Xoá toàn bộ cache mỗi giây',
+        'Bỏ cache, luôn đọc thẳng DB',
+      ],
+      answer: 0,
+      explain: 'Single-flight lock đảm bảo chỉ 1 request đi xuống DB để nạp lại cache; các request khác chờ rồi đọc từ cache đã nạp → DB chỉ bị đánh 1 lần thay vì N lần.',
+    },
+    {
+      q: 'Khi cache đầy, LRU eviction chọn xoá phần tử nào?',
+      options: [
+        'Phần tử mới được thêm gần đây nhất',
+        'Phần tử ngẫu nhiên',
+        'Phần tử có giá trị lớn nhất',
+        'Phần tử ÍT được dùng gần đây nhất',
+      ],
+      answer: 3,
+      explain: 'LRU = Least Recently Used. Trong demo, Map giữ thứ tự chèn nên key ở đầu là "cũ" nhất; mỗi lần get() ta đẩy key xuống cuối để đánh dấu vừa được dùng.',
+    },
+    {
+      q: 'Write Back (write-behind) đánh đổi điều gì để có write latency thấp?',
+      options: [
+        'Đọc dữ liệu chậm hơn hẳn',
+        'Rủi ro MẤT dữ liệu nếu cache crash trước khi flush xuống DB',
+        'Không thể dùng TTL',
+        'Luôn trả về dữ liệu cũ',
+      ],
+      answer: 1,
+      explain: 'Write Back ghi vào cache trước rồi flush xuống DB sau (async). Nếu cache server chết trong khoảng chờ flush, phần dữ liệu chưa flush sẽ mất → chỉ dùng cho data chấp nhận mất (view count, analytics).',
+    },
+  ],
+  exercises: [
+    {
+      id: 'fix-cache-aside',
+      title: 'Sửa lỗi Cache Aside quên ghi cache',
+      task: 'Hàm getProduct bị lỗi: khi cache MISS nó query DB nhưng QUÊN ghi kết quả vào cache, nên lần sau vẫn miss và DB bị đánh mỗi request. Hãy sửa để DB chỉ bị đánh đúng theo số id duy nhất. Output kỳ vọng: DB queries = 2.',
+      buggyCode: `// BUG: quên ghi cache sau khi query DB lúc miss
+let dbQueries = 0;
+const database = new Map([[1, 'A'], [2, 'B']]);
+const cache = new Map();
+
+function getProduct(id) {
+  if (cache.has(id)) return cache.get(id);
+  dbQueries++;
+  const v = database.get(id) || null;
+  // TODO: ghi cache ở đây trước khi return
+  return v;
+}
+
+const reqs = [1, 1, 2, 1, 2, 2];
+for (const id of reqs) getProduct(id);
+console.log('DB queries = ' + dbQueries);`,
+      expectedOutput: 'DB queries = 2',
+      hint: 'Cache-Aside: sau khi query DB lúc miss, phải ghi kết quả vào cache (cache.set(id, v)) TRƯỚC khi return để lần sau hit.',
+      solution: `let dbQueries = 0;
+const database = new Map([[1, 'A'], [2, 'B']]);
+const cache = new Map();
+
+function getProduct(id) {
+  if (cache.has(id)) return cache.get(id);
+  dbQueries++;
+  const v = database.get(id) || null;
+  if (v) cache.set(id, v);   // ghi cache để lần sau hit
+  return v;
+}
+
+const reqs = [1, 1, 2, 1, 2, 2];
+for (const id of reqs) getProduct(id);
+console.log('DB queries = ' + dbQueries);`,
+    },
   ],
 }

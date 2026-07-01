@@ -206,5 +206,55 @@ console.log('Trang 2:', page2.data.map(p => \`\${p.id} (\${p.timestamp})\`));
     { type: 'success', icon: '⚡', title: 'Redis Sorted Set lưu trữ Timeline cực đỉnh', body: 'Sử dụng cấu trúc dữ liệu Sorted Set (ZSET) với Score là timestamp của bài viết để lưu trữ dòng thời gian giúp bạn truy xuất và phân trang theo thời gian cực nhanh với độ phức tạp chỉ O(log N).' },
     { type: 'info', icon: '🏢', title: 'Mô hình Hybrid: Tối ưu chi phí ghi/đọc', body: 'Hãy kết hợp: Push model cho đa số người dùng bình thường để có read latency siêu thấp, và Pull model cho các celebrity để tránh quá tải ghi khi họ tạo bài viết.' },
     { type: 'tip', icon: '🧹', title: 'Chỉ nên cache feed của Active User', body: 'Đừng lãng phí bộ nhớ lưu trữ feed cho các user lâu ngày không online. Hãy đặt TTL hoặc cơ chế dọn dẹp để giới hạn timeline của active user ở 500-1000 bài viết mới nhất.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Bài toán Người Nổi Tiếng (celebrity problem) gắn với mô hình nào và vì sao?',
+      options: ['Fan-out on Read, vì phải merge quá nhiều danh sách khi đọc feed', 'Cursor pagination, vì cursor bị trùng khi có nhiều follower', 'Fan-out on Write, vì một bài đăng phải ghi vào hàng trăm triệu inbox', 'Ranking, vì thuật toán ML quá tốn CPU với người nổi tiếng'],
+      answer: 2,
+      explain: 'Với Fan-out on Write, một celebrity có 100M followers đăng bài sẽ tạo 100M lượt ghi, làm sập server ghi.',
+    },
+    {
+      q: 'Vì sao News Feed nên dùng Cursor-based Pagination thay vì OFFSET?',
+      options: ['Vì OFFSET không hỗ trợ Redis Sorted Set', 'Vì OFFSET chỉ hoạt động được với cơ sở dữ liệu SQL', 'Vì cursor giúp mã hóa dữ liệu an toàn hơn OFFSET rất nhiều', 'Vì feed thay đổi liên tục nên OFFSET dễ gây trùng hoặc lọt bài viết'],
+      answer: 3,
+      explain: 'Feed liên tục có post mới chen vào, OFFSET sẽ quét lệch và gây trùng/lọt bài. Cursor (timestamp bài cuối) tránh được điều này.',
+    },
+    {
+      q: 'Cấu trúc dữ liệu nào lý tưởng để lưu Timeline theo thời gian?',
+      options: ['Redis List thông thường', 'Redis Sorted Set với score là timestamp', 'SQL table kết hợp OFFSET pagination', 'Bloom Filter'],
+      answer: 1,
+      explain: 'Redis Sorted Set cho insert O(log n) và range query O(log n + k), rất hợp để phân trang timeline theo thời gian.',
+    },
+    {
+      q: 'Đặc điểm của mô hình Fan-out on Read là gì?',
+      options: ['Write cực nhanh (chỉ lưu 1 bài), nhưng read đắt vì phải merge nhiều list', 'Write đắt, read cực nhanh vì feed đã được pre-compute sẵn', 'Cả read và write đều chậm ngang nhau', 'Không cần lưu trữ post trong database'],
+      answer: 0,
+      explain: 'Fan-out on Read chỉ lưu 1 post khi ghi, nhưng lúc đọc phải query và merge posts của tất cả người đang follow nên read đắt hơn.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế news feed cho mạng xã hội như Twitter hoặc Facebook: hiển thị bài đăng từ những người mà user theo dõi.',
+    scale: ['300 triệu DAU', 'Đọc:Ghi ≈ 100:1 (đăng ít, đọc feed nhiều)', 'Có celebrity hơn 100 triệu follower', 'p99 tải feed < 200ms'],
+    requirements: [
+      'Tạo feed cá nhân hoá từ những người user follow',
+      'Cập nhật feed gần real-time khi có bài mới',
+      'Xử lý được tài khoản celebrity có cực nhiều follower',
+      '(Tuỳ chọn) xếp hạng bài theo mức độ liên quan thay vì thời gian thuần',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng QPS đăng bài, QPS đọc feed và số lượt ghi khi fan-out.', hint: '300M DAU, mỗi user đăng ~2 bài/ngày → ~7.000 bài/s. Đọc feed x100 ≈ 700.000/s. Một celebrity 100M follower đăng 1 bài → 100 triệu lượt ghi nếu fan-out on write.' },
+      { title: 'API Design', prompt: 'Định nghĩa endpoint đăng bài và tải feed. Dùng kiểu pagination nào?', hint: 'POST /posts {content} → 201. GET /feed?cursor=... trả về danh sách postId + nextCursor. Dùng cursor/keyset pagination cho infinite scroll, tránh OFFSET.' },
+      { title: 'Data Model', prompt: 'Thiết kế schema post, quan hệ follow và cấu trúc timeline.', hint: 'posts(post_id, author_id, content, created_at); follows(follower_id, followee_id); feed cache = Redis Sorted Set feed:{userId} score=timestamp, giới hạn 1000 item.' },
+      { title: 'Fan-out Strategy', prompt: 'Chọn fan-out on write hay on read? Xử lý celebrity problem thế nào?', hint: 'Hybrid: user thường (< 1 triệu follower) fan-out on write, push postId vào Redis Sorted Set của từng follower → đọc cực nhanh. Celebrity fan-out on read, không push, lúc đọc mới pull rồi merge. Ngưỡng follower tuỳ chỉnh theo tải.' },
+      { title: 'Scale & Trade-offs', prompt: 'Bàn về pagination, ranking, dung lượng cache và hot key.', hint: 'Cursor pagination thay OFFSET (tránh trùng-lọt khi có bài chen vào). Chỉ cache feed active user, giới hạn 500-1000 item + TTL. Ranking: score = engagement x decay theo thời gian. Celebrity là hot key → nhân bản cache nhiều node.' },
+    ],
+    rubric: [
+      'Có ước lượng QPS đăng bài, đọc feed và số lượt ghi khi fan-out',
+      'API dùng cursor pagination cho infinite scroll',
+      'Data model có bảng post, quan hệ follow và cấu trúc timeline (Sorted Set)',
+      'Chọn chiến lược fan-out và giải quyết celebrity problem bằng hybrid',
+      'Nêu được ít nhất 2 trade-offs (write-heavy vs read-heavy, cache active user, ranking)',
+    ],
+  },
 }

@@ -164,5 +164,55 @@ class RecommendationModel {
     { type: 'success', icon: '🎯', title: 'Hệ thống lai (Hybrid System) tối ưu nhất', body: 'Hãy kết hợp Content-Based Filtering cho các sản phẩm mới (chưa có tương tác) và Collaborative Filtering cho các sản phẩm đã có lịch sử click để hạn chế tối đa điểm yếu Cold Start.' },
     { type: 'info', icon: '📊', title: 'Hiểu về Training-Serving Skew', body: 'Đây là hiện tượng lệch pha dữ liệu xảy ra khi code tính toán feature lúc huấn luyện (Offline) khác với code tính feature chạy trực tiếp (Online). Sử dụng Feature Store (e.g. Feast) là giải pháp tiêu chuẩn để giải quyết triệt để vấn đề này.' },
     { type: 'tip', icon: '⚡', title: 'Tính toán offline các ma trận tương đồng', body: 'Tính tương đồng (Similarity) giữa các sản phẩm (Item-item similarity) tốn rất nhiều tài nguyên. Hãy chạy tính toán này offline định kỳ (hàng ngày bằng Spark/BigQuery), lưu kết quả vào Redis để phục vụ truy vấn thời gian thực.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Collaborative Filtering đưa ra đề xuất dựa trên cơ sở nào?',
+      options: ['Dựa trên features của item như genre, director, actors', 'Dựa trên nội dung mô tả chi tiết của từng sản phẩm', 'Dựa trên behavior của những users tương tự (users thích X cũng thích Y)', 'Dựa trên số lượng links trỏ vào mỗi item'],
+      answer: 2,
+      explain: 'Collaborative Filtering khai thác hành vi của users tương tự: tìm người giống bạn hoặc item tương tự để đề xuất, đúng với ý tưởng users thích X cũng thích Y.',
+    },
+    {
+      q: 'Nhược điểm chính của Content-Based Filtering là gì?',
+      options: ['Cần rất nhiều dữ liệu tương tác từ những users khác', 'Không thể giải thích được lý do đưa ra đề xuất', 'Yêu cầu pre-compute một similarity matrix rất phức tạp', 'Chỉ đề xuất trong vùng comfort zone của user, gây filter bubble'],
+      answer: 3,
+      explain: 'Content-Based không có cold start với item và có explainability, nhưng nhược điểm là chỉ gợi ý quanh sở thích cũ của user, tạo filter bubble.',
+    },
+    {
+      q: 'Matrix Factorization hoạt động theo nguyên lý nào?',
+      options: ['Học latent factors bằng cách factorize user-item matrix thành hai ma trận U và V', 'Đếm số lượng từ khóa chung giữa các sản phẩm', 'Lưu trữ và serve features cho inference real-time', 'Chia traffic thành hai nhóm để so sánh thuật toán'],
+      answer: 0,
+      explain: 'Matrix Factorization phân rã ma trận tương tác R (users nhân items) thành U (users nhân factors) và V (items nhân factors), predict rating bằng tích vô hướng U[user] và V[item].',
+    },
+    {
+      q: 'Feature Store được dùng để giải quyết vấn đề nào?',
+      options: ['Cold start cho những user hoàn toàn mới', 'Training-serving skew, đảm bảo training và inference dùng cùng feature definitions', 'Filter bubble trong các đề xuất của hệ thống', 'Độ trễ cao của web crawler khi thu thập dữ liệu'],
+      answer: 1,
+      explain: 'Feature Store là kho tập trung với Offline Store và Online Store, đảm bảo training/serving parity nên loại bỏ được training-serving skew.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế một recommendation system như Netflix/YouTube: gợi ý cá nhân hoá cho hàng triệu user theo thời gian thực.',
+    scale: ['100 triệu user hoạt động', '10 triệu item trong catalog', '1 tỷ tương tác (view/click)/ngày', 'p99 độ trễ gợi ý < 100ms'],
+    requirements: [
+      'Gợi ý cá nhân hoá dựa trên hành vi (collaborative filtering)',
+      'Xử lý cold start cho user và item mới',
+      'Phục vụ gợi ý real-time với độ trễ thấp',
+      'Đảm bảo nhất quán feature giữa training và serving',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng QPS gợi ý, dung lượng interaction data và similarity matrix.', hint: '1 tỷ tương tác/ngày ≈ 11.500 ghi/s. Nếu mỗi user xem 5 trang/ngày → ~5.800 request gợi ý/s. Item-item similarity đầy đủ cho 10 triệu item là bất khả thi → chỉ giữ top-K (~100) mỗi item.' },
+      { title: 'API Design', prompt: 'Định nghĩa endpoint lấy danh sách gợi ý và ghi nhận tương tác.', hint: 'GET /recommendations?userId=...&count=20 → 200 {items, modelVersion}. POST /events {userId, itemId, type} để log click/view làm dữ liệu train. Trả kèm lý do gợi ý phục vụ explainability.' },
+      { title: 'Data Model', prompt: 'Thiết kế lưu trữ tương tác, embeddings và feature cho model.', hint: 'Interaction log (user, item, type, timestamp) trong data warehouse. User/item embeddings (vector k ≈ 50-200 chiều) từ matrix factorization. Feature store gồm Offline Store (train) và Online Store (serve, Redis/DynamoDB).' },
+      { title: 'Retrieval & Ranking', prompt: 'Thiết kế kiến trúc 2 tầng: candidate generation và ranking cá nhân hoá.', hint: 'Tầng 1 (retrieval): CF hoặc ANN trên embeddings lấy vài trăm candidate thật nhanh. Tầng 2 (ranking): model nặng hơn dùng feature từ Online Store chấm điểm top-K. Cold start: dùng content-based hoặc popularity cho user/item mới.' },
+      { title: 'Scale & Trade-offs', prompt: 'Cân bằng offline vs online serving và chống filter bubble.', hint: 'Tính offline similarity/embeddings hàng ngày bằng Spark, lưu Redis để serve real-time. Feature store chống training-serving skew. Chèn 5-10% item khám phá (exploration) chống filter bubble. Trade-off: model phức tạp (chính xác) vs độ trễ serving.' },
+    ],
+    rubric: [
+      'Có ước lượng QPS gợi ý, dung lượng interaction và giới hạn similarity matrix',
+      'API lấy gợi ý và ghi nhận tương tác rõ ràng',
+      'Thiết kế được lưu trữ interaction, embeddings và feature store',
+      'Tách được kiến trúc 2 tầng retrieval và ranking, có xử lý cold start',
+      'Nêu trade-off offline vs online serving và chống filter bubble',
+    ],
+  },
 }

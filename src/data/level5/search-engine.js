@@ -188,5 +188,55 @@ console.log('Bảng xếp hạng độ khớp:', results);`
     { type: 'success', icon: '📦', title: 'Elasticsearch là chuẩn mực công nghệ', body: 'Đừng tự code công cụ tìm kiếm cho production. Hãy sử dụng Elasticsearch hoặc OpenSearch. Chúng chạy trên Apache Lucene, tích hợp sẵn các thuật toán xếp hạng tối ưu BM25 và phân tán dữ liệu mạnh mẽ.' },
     { type: 'info', icon: '📑', title: 'Khác biệt Inverted Index vs Forward Index', body: 'Forward Index map từ Document -> Terms (dùng khi hiển thị dữ liệu). Inverted Index map từ Term -> Documents (dùng khi tìm kiếm nhanh). Chỉ mục đảo là nhân tố quyết định tốc độ tìm kiếm O(1).' },
     { type: 'tip', icon: '🔪', title: 'Tính toán Shards trước khi tạo Index', body: 'Trong Elasticsearch, số lượng Primary Shards không thể thay đổi sau khi tạo Index. Hãy thiết kế dung lượng mỗi shard từ 20GB - 40GB để cân bằng hiệu năng đọc/ghi.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Inverted Index ánh xạ dữ liệu theo chiều nào?',
+      options: ['Document sang danh sách các terms nằm trong nó', 'URL sang điểm PageRank tương ứng', 'Term sang vị trí hiển thị trên màn hình kết quả', 'Term sang list of documents chứa term đó (posting list)'],
+      answer: 3,
+      explain: 'Inverted Index là core của search engine: ánh xạ từ term sang posting list các documents chứa term, kèm position và frequency, giúp tìm kiếm nhanh.',
+    },
+    {
+      q: 'BM25 cải tiến TF-IDF bằng cách xử lý hai vấn đề nào?',
+      options: ['Tăng tốc crawl và giảm dung lượng của index', 'Mã hóa dữ liệu và phân tán index qua nhiều shard', 'Term saturation và document length normalization', 'Politeness với robots.txt và deduplication URL'],
+      answer: 2,
+      explain: 'BM25 xử lý hai điểm yếu của TF-IDF: term saturation (TF cao không làm score tăng vô hạn) và chuẩn hóa theo độ dài document, với params k1 và b.',
+    },
+    {
+      q: 'PageRank đánh giá tầm quan trọng của một trang web dựa trên yếu tố nào?',
+      options: ['Số lần từ khóa được lặp lại trong nội dung trang', 'Số lượng và chất lượng của các links trỏ vào trang đó', 'Tốc độ tải trang trên trình duyệt của người dùng', 'Tổng độ dài của toàn bộ document'],
+      answer: 1,
+      explain: 'PageRank tính tầm quan trọng dựa trên số lượng và chất lượng các links inbound: trang được nhiều trang quan trọng khác link đến sẽ có PageRank cao hơn.',
+    },
+    {
+      q: 'Ràng buộc quan trọng nào cần lưu ý về Primary Shards trong Elasticsearch?',
+      options: ['Số primary shards không thể split sau khi tạo index, cần plan ahead', 'Mỗi shard chỉ chứa được đúng một document duy nhất', 'Shard tự động tăng lên khi index nhỏ hơn 1GB', 'Tất cả các shard bắt buộc phải nằm trên cùng một node'],
+      answer: 0,
+      explain: 'Số primary shards cố định ngay khi tạo index và không thể split về sau, nên phải plan ahead; muốn tăng read throughput thì thêm replicas chứ không phải shards.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế một web search engine như Google ở quy mô nhỏ: crawl, index và trả về kết quả đã xếp hạng trong vài chục ms.',
+    scale: ['10 tỷ trang trong index', '100.000 truy vấn/s (QPS)', 'Crawl 1 tỷ trang mới/ngày', 'p99 độ trễ tìm kiếm < 200ms'],
+    requirements: [
+      'Crawl và cập nhật nội dung web định kỳ (chống stale index)',
+      'Xây inverted index phục vụ full-text search',
+      'Xếp hạng kết quả theo độ liên quan (BM25) và độ uy tín (PageRank)',
+      'Hỗ trợ autocomplete và sửa lỗi chính tả (tuỳ chọn)',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng dung lượng index, QPS đọc và băng thông crawl cần thiết.', hint: '10 tỷ trang x ~5KB text ≈ 50TB raw; inverted index nén còn ~20% → ~10TB. Crawl 1 tỷ trang/ngày ≈ 11.500 trang/s. 100.000 QPS đọc phải fan-out qua nhiều shard.' },
+      { title: 'API Design', prompt: 'Định nghĩa endpoint tìm kiếm và cách phân trang kết quả.', hint: 'GET /search?q=...&page=1&size=10 → 200 {results, total, tookMs}, trả kèm highlight snippet. Tách endpoint suggest cho autocomplete để độ trễ cực thấp.' },
+      { title: 'Data Model', prompt: 'Thiết kế cấu trúc inverted index (term → posting list) và document store.', hint: 'term → posting list [{docId, tf, positions}]. Doc store: docId → {url, title, metadata}. Tách forward index (hiển thị) và inverted index (tìm kiếm); term dictionary giữ trong RAM, posting list trên đĩa.' },
+      { title: 'Crawl, Index & Ranking', prompt: 'Thiết kế pipeline crawl-index và cơ chế xếp hạng kết quả.', hint: 'Crawler tôn trọng robots.txt, dedup URL bằng Bloom filter, tránh crawler trap bằng giới hạn độ sâu. Index offline theo batch (segment-based, merge định kỳ). Xếp hạng: BM25 (k1 ≈ 1.2, b ≈ 0.75) kết hợp PageRank và các signal khác.' },
+      { title: 'Scale & Trade-offs', prompt: 'Sharding index, scatter-gather và cân bằng freshness với chi phí.', hint: 'Shard inverted index theo document (mỗi shard ~20-40GB), query fan-out scatter-gather rồi merge top-K. Thêm replica để tăng read throughput. Trade-off: re-index thường xuyên (fresh) tốn tài nguyên; near-real-time flush mỗi 1s.' },
+    ],
+    rubric: [
+      'Có ước lượng cụ thể dung lượng index, QPS đọc và tốc độ crawl',
+      'API tìm kiếm rõ ràng, có phân trang và snippet',
+      'Mô tả đúng cấu trúc inverted index và pipeline index offline',
+      'Kết hợp được ít nhất hai signal xếp hạng (BM25 và PageRank)',
+      'Nêu chiến lược sharding scatter-gather và trade-off freshness với chi phí',
+    ],
+  },
 }

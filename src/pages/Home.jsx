@@ -16,7 +16,7 @@ export default function Home() {
       <div className={styles.hero}>
         <div className={styles.heroTag}>⚡ Backend Engineering Curriculum</div>
         <h1 className={styles.heroTitle}>
-          Học 30 Bài Toán<br />
+          Học {TOTAL_TOPICS} Bài Toán<br />
           <span className="gradient-text">Kinh Điển Backend</span>
         </h1>
         <p className={styles.heroDesc}>

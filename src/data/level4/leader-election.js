@@ -189,5 +189,31 @@ zk.checkLeader(pathB, 'Node-B'); // Trở thành Leader mới`
     { type: 'success', icon: '📦', title: 'Không tự viết thuật toán Consensus', body: 'Thuật toán consensus rất khó triển khai đúng 100% trong thực tế do biên dạng lỗi mạng đa dạng. Hãy sử dụng các thư viện chuẩn hóa như etcd, Consul hoặc ZooKeeper.' },
     { type: 'info', icon: '🎯', title: 'Phân biệt Raft và Paxos', body: 'Raft sử dụng một Leader mạnh và tập trung quản lý dòng chảy dữ liệu, giúp dễ hiểu và triển khai hơn Paxos vốn mang tính phi tập trung và cấu trúc phức tạp hơn.' },
     { type: 'tip', icon: '🔑', title: 'Sử dụng Fencing Token chống Stale Leader', body: 'Khi một Leader bị ngắt kết nối mạng tạm thời (GC Pause/Network Lag), nó có thể nghĩ mình vẫn là Leader. Hãy sinh Token tăng dần (Term/Epoch) trong các lệnh Write để storage server từ chối các request từ Leader hết hạn.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Trong Raft, một Candidate trở thành Leader khi nào?',
+      options: ['Khi nó có term number nhỏ nhất cluster', 'Khi node đầu tiên trong danh sách đồng ý', 'Khi nó tự bầu phiếu cho chính mình', 'Khi nó nhận được đa số phiếu bầu (majority)'],
+      answer: 3,
+      explain: 'Candidate gửi RequestVote tới các node khác và chỉ trở thành Leader khi thu được majority votes trong term đó.',
+    },
+    {
+      q: 'Tại sao Raft thường được ưa dùng hơn Paxos trong thực tế?',
+      options: ['Vì Raft luôn nhanh hơn Paxos gấp 10 lần', 'Vì Raft dễ hiểu và dễ implement hơn nhưng cùng safety guarantees', 'Vì Raft không cần có leader', 'Vì Raft không sử dụng khái niệm term'],
+      answer: 1,
+      explain: 'Raft được thiết kế để dễ hiểu và dễ triển khai đúng hơn Paxos trong khi vẫn cung cấp cùng các safety guarantees.',
+    },
+    {
+      q: 'ZooKeeper bầu leader theo cách nào để tránh thundering herd?',
+      options: ['Tất cả node cùng watch trực tiếp znode của leader', 'Node có số sequential lớn nhất làm leader', 'Dùng ephemeral sequential znode, node nhỏ nhất làm leader và mỗi node chỉ watch node liền trước', 'Bầu lại một leader ngẫu nhiên sau mỗi 100ms'],
+      answer: 2,
+      explain: 'Mỗi node tạo ephemeral sequential znode; node có số nhỏ nhất là Leader, và mỗi node chỉ watch predecessor nên khi leader fail chỉ một node được notify.',
+    },
+    {
+      q: 'Cách phổ biến để ngăn Split Brain khi có network partition là gì?',
+      options: ['Chỉ nhóm có đa số node (majority > N/2) mới được hoạt động, nhóm thiểu số từ chối ghi', 'Cho phép cả hai nhóm cùng nhận writes', 'Tăng số lượng node lên số chẵn', 'Tắt hoàn toàn cơ chế term/epoch'],
+      answer: 0,
+      explain: 'Chỉ nhóm đạt majority (lớn hơn N/2 node) mới được bầu leader và nhận writes; nhóm thiểu số reject writes để tránh hai leader ghi mâu thuẫn.',
+    },
+  ],
 }

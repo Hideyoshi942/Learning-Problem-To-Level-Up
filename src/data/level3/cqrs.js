@@ -260,4 +260,50 @@ demo();`,
     { type: 'info', icon: '⚖️', title: 'Khi nào dùng CQRS?', body: 'Chỉ dùng CQRS khi thực sự cần: read/write load khác biệt lớn, cần multiple read views, hoặc domain phức tạp. Đừng over-engineer – CRUD đơn giản cho 90% use cases.' },
     { type: 'tip', icon: '🔄', title: 'Projection có thể rebuild', body: 'Nếu Read Model bị corrupt hoặc cần thay đổi schema, chỉ cần xóa và rebuild projection bằng cách replay toàn bộ events. Đây là advantage lớn của CQRS + Event Sourcing.' },
   ],
+  quiz: [
+    {
+      q: 'Read Model trong CQRS được thiết kế theo hướng nào?',
+      options: [
+        'Normalized triệt để để đảm bảo integrity khi ghi',
+        'Chứa business logic và các quy tắc validation',
+        'Denormalized, pre-aggregated, tối ưu cho queries không cần JOIN phức tạp',
+        'Bắt buộc dùng chung một loại database với Write Model',
+      ],
+      answer: 2,
+      explain: 'Read Model là projection của Write Model, được denormalize và pre-aggregate, format sẵn cho UI để query cực nhanh mà không cần JOIN phức tạp.',
+    },
+    {
+      q: 'Trách nhiệm chính của Write Model (Command side) là gì?',
+      options: [
+        'Xử lý business logic và đảm bảo các invariants',
+        'Tối ưu tốc độ query để hiển thị cho UI',
+        'Denormalize dữ liệu thành nhiều views khác nhau',
+        'Cache kết quả truy vấn để trả về nhanh hơn',
+      ],
+      answer: 0,
+      explain: 'Write Model xử lý business logic và đảm bảo business rules (invariants), normalized và focused vào correctness. Không bao giờ dùng Write Model để query hiển thị.',
+    },
+    {
+      q: 'Eventual Consistency trong CQRS nghĩa là gì?',
+      options: [
+        'Read và Write luôn nhất quán ngay lập tức tại mọi thời điểm',
+        'Write Model luôn chậm hơn Read Model một khoảng cố định',
+        'Dữ liệu giữa hai model không bao giờ có thể nhất quán',
+        'Read Model sẽ được update sau một khoảng delay so với Write side',
+      ],
+      answer: 3,
+      explain: 'Sau khi Write side commit, Read Model được update EVENTUALLY với một độ trễ (thường mili giây, đôi khi vài giây). Đây là trade-off của CQRS.',
+    },
+    {
+      q: 'Nếu Read Model bị corrupt, CQRS kết hợp Event Sourcing xử lý như thế nào?',
+      options: [
+        'Phải khôi phục thủ công từ bản backup gần nhất',
+        'Xóa và rebuild projection bằng cách replay toàn bộ events',
+        'Không thể khôi phục, buộc phải nhập lại dữ liệu',
+        'Chuyển sang dùng trực tiếp Write Model để hiển thị',
+      ],
+      answer: 1,
+      explain: 'Vì Event Store là source of truth, Read Model bị corrupt có thể được xóa và rebuild lại bằng cách replay toàn bộ events, đây là advantage lớn của CQRS cộng Event Sourcing.',
+    },
+  ],
 }

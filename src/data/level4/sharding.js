@@ -190,5 +190,31 @@ const client = new ClientWithCache(dir);
     { type: 'success', icon: '🏢', title: 'Tận dụng Tenant ID trong mô hình SaaS', body: 'Trong các dự án SaaS (Multi-tenant), việc sử dụng Tenant ID làm Shard Key là mô hình hoàn hảo giúp gom toàn bộ dữ liệu của khách hàng vào cùng 1 shard vật lý.' },
     { type: 'info', icon: '🛑', title: 'Không nên sharding quá sớm', body: 'Sharding làm tăng độ phức tạp hệ thống lên gấp nhiều lần. Hãy cố gắng tối ưu hóa bằng indexes, read-replicas, caching, partitioning trước khi quyết định sharding.' },
     { type: 'tip', icon: '🔍', title: 'Tách biệt nhu cầu tìm kiếm chéo shard', body: 'Khi cần thực hiện các tìm kiếm phức tạp (cross-shard query), đừng dùng DB SQL thuần. Hãy đồng bộ dữ liệu sang Elasticsearch để thực hiện tìm kiếm full-text và lọc đa tiêu chí.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Range Sharding dễ gặp vấn đề gì khi dữ liệu mới nhất luôn rơi vào shard cuối cùng?',
+      options: ['Hotspot (hot shard) khiến một shard bị quá tải', 'Mất kết nối mạng giữa các shard', 'Deadlock trên toàn bộ cluster', 'Thiếu index trên shard key'],
+      answer: 0,
+      explain: 'Range Sharding chia theo range của shard key nên nếu data mới luôn vào shard cuối, shard đó bị overloaded, tạo ra hot shard problem.',
+    },
+    {
+      q: 'Ưu điểm chính của Hash Sharding so với Range Sharding là gì?',
+      options: ['Hỗ trợ range query hiệu quả hơn nhiều', 'Phân phối dữ liệu đều hơn, tránh hotspot', 'Không bao giờ cần rehash khi thêm shard', 'Loại bỏ hoàn toàn nhu cầu về shard key'],
+      answer: 1,
+      explain: 'Hash Sharding dùng hash(shard_key) % num_shards nên phân phối data đều hơn Range Sharding, nhưng đánh đổi là không hỗ trợ range queries tốt.',
+    },
+    {
+      q: 'Nhược điểm của lookup table trong Directory Sharding là gì?',
+      options: ['Không thể rebalance dữ liệu về sau', 'Chỉ chạy được trên database NoSQL', 'Bắt buộc phải dùng auto-increment ID', 'Là single point of failure và thêm một hop cho mỗi query'],
+      answer: 3,
+      explain: 'Directory Sharding linh hoạt nhất và dễ rebalance, nhưng lookup table trở thành single point of failure và thêm một hop mạng cho mỗi truy vấn.',
+    },
+    {
+      q: 'Vì sao Cross-shard Query (ví dụ Top 10 users toàn hệ thống) rất tốn kém?',
+      options: ['Vì chỉ thực hiện được trên một shard duy nhất', 'Vì luôn làm mất dữ liệu trên các shard khác', 'Vì phải query tất cả các shard song song rồi merge kết quả', 'Vì cần khóa (lock) toàn bộ database khi chạy'],
+      answer: 2,
+      explain: 'Cross-shard query cần dữ liệu từ nhiều shard nên phải query tất cả shard song song rồi merge, chi phí tăng theo số lượng shard.',
+    },
+  ],
 }

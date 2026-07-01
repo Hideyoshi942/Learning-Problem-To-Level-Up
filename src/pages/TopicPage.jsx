@@ -3,12 +3,17 @@ import { useState } from 'react'
 import { getTopic, getLevel } from '../data/index'
 import CodeRunner from '../components/CodeRunner/CodeRunner'
 import InteractiveBox from '../components/TopicContent/InteractiveBox'
+import Quiz from '../components/Quiz/Quiz'
+import DesignChallenge from '../components/DesignChallenge/DesignChallenge'
+import DebugExercise from '../components/DebugExercise/DebugExercise'
+import useProgressStore from '../store/useProgressStore'
 import styles from './TopicPage.module.css'
 
 export default function TopicPage() {
   const { levelId, topicSlug } = useParams()
   const level = getLevel(Number(levelId))
   const topic = getTopic(Number(levelId), topicSlug)
+  const { isDone, markDone } = useProgressStore()
 
   if (!topic || !level) return <Navigate to="/" replace />
 
@@ -73,6 +78,14 @@ export default function TopicPage() {
         </section>
       )}
 
+      {/* Debug exercises (Bloom: Vận dụng) */}
+      {topic.exercises?.length > 0 && (
+        <section>
+          <SectionTitle>🐞 Bài Tập Sửa Lỗi (sửa code cho đúng output)</SectionTitle>
+          <DebugExercise key={topicSlug} exercises={topic.exercises} levelColor={level.color} />
+        </section>
+      )}
+
       {/* Callouts */}
       {topic.callouts?.length > 0 && (
         <section>
@@ -87,6 +100,31 @@ export default function TopicPage() {
               </div>
             </div>
           ))}
+        </section>
+      )}
+
+      {/* Design challenge (Bloom: Phân tích/Thiết kế) */}
+      {topic.challenge && (
+        <section>
+          <SectionTitle>🏗️ Bài Tập Thiết Kế Hệ Thống</SectionTitle>
+          <DesignChallenge key={topicSlug} challenge={topic.challenge} levelColor={level.color} />
+        </section>
+      )}
+
+      {/* Quiz */}
+      {topic.quiz?.length > 0 && (
+        <section>
+          <SectionTitle>🧠 Kiểm tra kiến thức</SectionTitle>
+          <Quiz
+            key={topicSlug}
+            questions={topic.quiz}
+            levelColor={level.color}
+            onComplete={(sc, total) => {
+              if (sc / total >= 0.7 && !isDone(Number(levelId), topicSlug)) {
+                markDone(Number(levelId), topicSlug)
+              }
+            }}
+          />
         </section>
       )}
 

@@ -162,5 +162,55 @@ ec.recover(receivedChunks);`
     { type: 'success', icon: '☁️', title: 'Độ bền vượt trội 11 số 9 của S3', body: 'AWS S3 đảm bảo độ bền dữ liệu 99.999999999% bằng cách tự động sao chép và đồng bộ tệp tin qua ít nhất 3 vùng sẵn sàng (Availability Zones) hoàn toàn cách biệt địa lý.' },
     { type: 'info', icon: '📁', title: 'Phân biệt Object Storage vs Block Storage', body: 'Block Storage (như AWS EBS) hoạt động ở tầng hệ điều hành, cho phép đọc/ghi ngẫu nhiên trên phân vùng đĩa. Object Storage là Flat Key-Value, dữ liệu là bất biến (Immutable), không hỗ trợ ghi đè một đoạn giữa tệp.' },
     { type: 'tip', icon: '🏗️', title: 'Lắp cấu hình Rack-Awareness giảm thiểu rủi ro', body: 'Hãy cấu hình Rack-Awareness trong HDFS để đảm bảo bản sao block được phân phối trên các tủ Rack mạng khác nhau. Điều này giúp hệ thống sống sót ngay cả khi cả một tủ rack bị sập nguồn hoặc đứt switch.' }
-  ]
+  ],
+  quiz: [
+    {
+      q: 'Với Replication Factor RF=3, hệ thống chịu được tối đa bao nhiêu node failures?',
+      options: ['3 node failures cùng lúc', 'Tối đa 2 node failures', 'Chỉ 1 node failure duy nhất', 'Không giới hạn số node failures'],
+      answer: 1,
+      explain: 'RF=3 lưu 3 copies của mỗi block, nên nếu mất 2 node vẫn còn 1 copy để phục vụ; do đó chịu được tối đa 2 node failures.',
+    },
+    {
+      q: 'Ưu điểm chính của Erasure Coding so với replication truyền thống là gì?',
+      options: ['Reed-Solomon dạng 8+4 chỉ tốn khoảng 50% overhead thay vì 200% như RF=3', 'Luôn cần tới 300% storage overhead cho mọi cấu hình', 'Không cần sinh ra bất kỳ parity block nào', 'Recovery đơn giản và nhanh hơn hẳn so với replication'],
+      answer: 0,
+      explain: 'Erasure Coding chia data thành k data blocks và m parity blocks, chỉ cần bất kỳ k blocks để recover, giúp overhead khoảng 50% thay vì 200% của RF=3.',
+    },
+    {
+      q: 'Điểm yếu nào của HDFS cần được khắc phục bằng thiết kế phù hợp?',
+      options: ['DataNode phải lưu toàn bộ metadata của cả cluster', 'HDFS chỉ hỗ trợ các file nhỏ dưới 1MB', 'NameNode là single point of failure nên cần HA NameNode (Active và Standby)', 'HDFS hoàn toàn không hỗ trợ cơ chế replication'],
+      answer: 2,
+      explain: 'Kiến trúc HDFS có 1 NameNode giữ metadata, đây là single point of failure nên cần HA NameNode dạng Active cộng Standby để đảm bảo tính sẵn sàng.',
+    },
+    {
+      q: 'Đặc điểm nào đúng với Object Storage như S3, GCS?',
+      options: ['Hỗ trợ ghi ngẫu nhiên (random writes) vào giữa một object', 'Lưu data theo cấu trúc phân cấp thư mục như filesystem thông thường', 'Đắt hơn Block Storage khoảng 5-10 lần', 'Lưu data dạng objects trong flat namespace, immutable, không hỗ trợ random writes'],
+      answer: 3,
+      explain: 'Object Storage lưu data dưới dạng objects trong flat namespace (key phẳng, không phải hierarchy), objects là immutable và không hỗ trợ random writes.',
+    },
+  ],
+  challenge: {
+    brief: 'Thiết kế một distributed file storage như GFS/HDFS: lưu file cực lớn, bền vững và chịu được hỏng ổ đĩa hàng loạt.',
+    scale: ['100 PB tổng dung lượng', '10.000 DataNode trong cluster', 'File đơn lẻ tới hàng TB', 'Độ bền dữ liệu 11 số 9 (99.999999999%)'],
+    requirements: [
+      'Lưu file lớn bằng cách chia thành block/chunk',
+      'Đảm bảo durability khi ổ đĩa hoặc node hỏng',
+      'Quản lý metadata (file → block → vị trí) tập trung',
+      'Tối ưu chi phí lưu trữ cho dữ liệu nguội (tuỳ chọn)',
+    ],
+    steps: [
+      { title: 'Capacity Estimation', prompt: 'Ước lượng số block, dung lượng metadata và overhead lưu trữ.', hint: 'Block 128MB → 100PB ≈ 800 triệu block. Mỗi block metadata ~150 bytes → ~120GB RAM cho master. RF=3 → overhead 200%; erasure coding (8+4) → overhead chỉ 50%.' },
+      { title: 'API Design', prompt: 'Định nghĩa thao tác read/write file và luồng ghi đi qua master.', hint: 'write(path, data), read(path, offset, len), append(path, data). Client hỏi master để lấy vị trí block rồi đọc/ghi trực tiếp với DataNode. Ghi theo pipeline replication qua các replica.' },
+      { title: 'Data Model', prompt: 'Thiết kế metadata cho namespace và ánh xạ block → node.', hint: 'Master lưu path → danh sách blockId; blockId → danh sách DataNode (replica). Namespace dạng cây thư mục. Metadata giữ trong RAM để truy xuất nhanh, kèm edit log và checkpoint để phục hồi.' },
+      { title: 'Replication & Durability', prompt: 'Thiết kế replication, phát hiện block hỏng và cân nhắc erasure coding.', hint: 'RF=3 rack-aware (đặt replica trên rack khác nhau) chịu được 2 node fail. Heartbeat và checksum phát hiện block hỏng rồi tự re-replicate. Erasure coding Reed-Solomon (k=8, m=4) cho cold data để tiết kiệm dung lượng.' },
+      { title: 'Scale & Trade-offs', prompt: 'Xử lý single point of failure của master và vấn đề nhiều file nhỏ.', hint: 'Master là single point of failure → HA master (Active và Standby, chung edit log). Nhiều file nhỏ vắt kiệt RAM master → gom lại bằng SequenceFile/ORC. Trade-off: RF (nhanh, tốn dung lượng) vs erasure coding (rẻ, recovery tốn CPU và độ trễ cao).' },
+    ],
+    rubric: [
+      'Có ước lượng số block, dung lượng metadata và overhead lưu trữ',
+      'API và luồng ghi qua master rồi tới DataNode rõ ràng',
+      'Mô tả đúng metadata namespace và ánh xạ block → node',
+      'Nêu cơ chế replication rack-aware và/hoặc erasure coding kèm con số',
+      'Xử lý được single point of failure của master và vấn đề file nhỏ',
+    ],
+  },
 }
